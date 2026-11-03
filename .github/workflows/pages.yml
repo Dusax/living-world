@@ -1,7 +1,7 @@
 name: Publicar Mundo Vivo no GitHub Pages
 on:
   push:
-    branches: [main]
+    branches: [main, claude/affectionate-darwin-hqpp0w]   # a branch padrão atual deste repo; "main" vale se você renomear
   workflow_dispatch:
 permissions:
   contents: read
