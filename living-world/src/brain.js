@@ -1,6 +1,8 @@
 // Cérebro por instinto: utilidade ponderada por necessidades, personalidade, ofício e "voz do céu".
 import { pick } from './rng.js';
-import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITY_LABEL, ABILITIES, mod, alignment } from './agent.js';
+import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITY_LABEL, ABILITIES, mod, alignment, ADULT_AGE } from './agent.js';
+import { romanceTarget } from './life.js';
+import { goalBias, mindOf } from './mind.js';
 
 const KEYWORDS = [
   [/com(er|ida)|fome|fruta|colh|plant|aliment|campo/i, { gather_food: 40, farm: 45, eat: 10 }],
@@ -36,6 +38,11 @@ const THOUGHTS = {
   smith: ['O ferro não se forja sozinho.', 'Ferramentas melhores deixam todo mundo mais rápido.'],
   patrol: ['Alguém precisa vigiar a mata.', 'Vou fazer a ronda.'],
   expedition: ['Quero saber o que existe além da clareira.', 'Vou explorar. Alguém precisa.'],
+  flirt: ['Não consigo parar de pensar nessa pessoa.', 'Vou me aproximar.'],
+  confront: ['Já aguentei demais. Vou tirar isso a limpo.', 'Isso não vai ficar assim.'],
+  campaign: ['A vila precisa de um rei, e eu posso ser ele.', 'Preciso do apoio do povo.'],
+  teach: ['Os jovens precisam aprender com a gente.', 'Vou ensinar o que sei.'],
+  leave: ['Aqui não é mais o meu lugar.', 'Vou recomeçar a vida longe daqui.'],
 };
 
 const CLASS_BIAS = {
@@ -48,7 +55,30 @@ const ROLE_BIAS = {
   construtor: { build: 24 }, ferreiro: { smith: 44 }, guarda: { patrol: 28 }, explorador: { expedition: 22 }, rei: { talk: 15, patrol: -30, gather_wood: -25, gather_stone: -25, farm: -25 },
 };
 
+const TEEN_NO = new Set(['build', 'smith', 'patrol', 'expedition', 'gather_stone', 'confront', 'campaign', 'leave', 'flirt']);
+const OLD_PEN = { gather_stone: -40, gather_wood: -25, patrol: -40, expedition: -45, build: -15, smith: -10, leave: 0 };
+
+// Criança: come, dorme, brinca (anda por perto) e procura companhia (de preferência a família).
+function childDecide(sim, a) {
+  const r = sim.rng, opts = [];
+  const add = (score, d, key) => opts.push({ score: score + r() * 8, d: { ...d, thought: pick(r, THOUGHTS[key] || THOUGHTS.wander) } });
+  if (a.hunger > 35 && sim.foodAvailable(a)) add(a.hunger * 1.5, { type: 'eat' }, 'eat');
+  const hr = sim.hour();
+  if ((hr >= 20 || hr < 6) && a.fatigue > 25) add(80, { type: 'sleep' }, 'sleep'); else if (a.fatigue > 55) add(a.fatigue, { type: 'sleep' }, 'sleep');
+  if (a.loneliness > 25) { const kin = [...(a.parents || []), ...(a.kids || [])].map((id) => sim.byId(id)).filter((o) => o && o.alive && !o.sleeping); const o = kin[0] || sim.bestPartner(a); if (o) add(a.loneliness * 0.9, { type: 'talk', target: o.name }, 'talk'); }
+  add(14, { type: 'wander', far: false }, 'wander');
+  opts.sort((x, y) => y.score - x.score);
+  return opts[0].d;
+}
+
+export function romanticLine(sim, a, t) {
+  const L = [`Você é a pessoa mais interessante desta vila, ${t.name}.`, `Gosto de estar perto de você, ${t.name}.`, `Posso te acompanhar, ${t.name}?`, `${t.name}, tenho pensado muito em você.`, `Sua companhia me faz bem, ${t.name}.`];
+  return pick(sim.rng, L);
+}
+
 export function utilityDecide(sim, a) {
+  if (a.age < 12) return childDecide(sim, a);
+  const teen = a.age < ADULT_AGE, old = a.age >= 65, gb = goalBias(sim, a), lifeGoal = mindOf(a).goal;
   const t = a.traits, r = sim.rng;
   const living = sim.living(), pop = living.length, st = sim.stock;
   const bias = sim.biasFor(a), roleB = ROLE_BIAS[a.role] || {}, classB = CLASS_BIAS[a.cls] || {};
@@ -59,8 +89,9 @@ export function utilityDecide(sim, a) {
   const add = (key, score, d) => {
     const fk = d.type + (d.kind || '');
     const recentFail = a.fails[fk] && sim.tick - a.fails[fk] < 40 ? 50 : 0;
-    const fam = famine ? (key === 'gather_food' ? 35 : key === 'farm' ? 30 : ['build', 'patrol', 'smith', 'expedition', 'talk', 'wander', 'gather_stone'].includes(key) ? -35 : 0) : 0;
-    opts.push({ score: score + r() * 8 + (bias[key] || 0) + (roleB[key] || 0) + (classB[key] || 0) + fam - recentFail, d: { ...d, thought: pick(r, THOUGHTS[key]) } });
+    if (teen && TEEN_NO.has(key)) return;
+    const fam = famine ? (key === 'gather_food' ? 35 : key === 'farm' ? 30 : ['build', 'patrol', 'smith', 'expedition', 'talk', 'wander', 'gather_stone', 'flirt', 'confront', 'campaign', 'teach'].includes(key) ? -35 : 0) : 0;
+    opts.push({ score: score + r() * 8 + (bias[key] || 0) + (roleB[key] || 0) + (classB[key] || 0) + (gb[key] || 0) + (old ? OLD_PEN[key] || 0 : 0) + fam - recentFail, d: { ...d, thought: pick(r, THOUGHTS[key]) } });
   };
 
   if (a.hunger > 40 && sim.foodAvailable(a)) add('eat', a.hunger * 1.5, { type: 'eat' });
@@ -107,9 +138,25 @@ export function utilityDecide(sim, a) {
     const partner = sim.bestPartner(a);
     if (partner) add('talk', a.loneliness * (0.5 + t.sociability) * 0.9 + 5, { type: 'talk', target: partner.name });
   }
-  if (t.kindness > 0.45 && a.inv.food >= 3) {
+  // pais alimentam os filhos primeiro; os mais generosos ajudam quem passa fome
+  const hungryKid = (a.kids || []).map((id) => sim.byId(id)).find((o) => o && o.alive && o.age < ADULT_AGE && o.hunger > 45 && o.inv.food < 1);
+  if (hungryKid && a.inv.food >= 1) add('give', 85, { type: 'give', target: hungryKid.name, item: 'food' });
+  else if (t.kindness > 0.45 && a.inv.food >= 3) {
     const needy = living.find((o) => o !== a && o.hunger > 70 && o.inv.food < 1);
     if (needy) add('give', 65 + t.kindness * 20, { type: 'give', target: needy.name, item: 'food' });
+  }
+  // vida social e ambição
+  if (!teen) {
+    const gt = lifeGoal && lifeGoal.target ? sim.byId(lifeGoal.target) : null;
+    if (a.age >= 18 && a.age <= 75) {
+      const tg = gt && gt.alive && (lifeGoal.kind === 'casar' || lifeGoal.kind === 'conquistar') ? gt : romanceTarget(sim, a);
+      if (tg && !tg.sleeping) add('flirt', 12 + a.loneliness * 0.2 + (a.love[tg.id] || 0) * 0.25, { type: 'flirt', target: tg.name }); }
+    const foe = gt && gt.alive && lifeGoal.kind === 'vingar' ? gt : sim.living().filter((o) => o !== a && (a.rel[o.id] || 0) < -45 && !o.sleeping)[0];
+    if (foe && t.bravery > 0.35) add('confront', 3 + Math.max(0, -(a.rel[foe.id] || 0) - 40) * 0.3, { type: 'confront', target: foe.name });
+    if (!sim.king && sim.tier() >= 2 && a.age >= 25 && a.age < 70) add('campaign', 2, { type: 'campaign' });
+    const kid = sim.living().filter((o) => o.age < ADULT_AGE && o.age >= 3).sort((x, y) => Math.abs(x.x - a.x) + Math.abs(x.y - a.y) - Math.abs(y.x - a.x) - Math.abs(y.y - a.y))[0];
+    if (kid && a.age >= 30) add('teach', 4 + t.kindness * 5, { type: 'teach', target: kid.name });
+    if (lifeGoal && lifeGoal.kind === 'partir' && a.age >= 18) add('leave', 10, { type: 'leave' });
   }
   add('wander', 6 + t.curiosity * 12, { type: 'wander', far: t.bravery + t.curiosity > 1.3 });
 
@@ -149,6 +196,12 @@ export const ACTIONS_HELP = `Ações possíveis (campo "action"):
 - smith: forjar ferramentas (só com forja)
 - patrol: fazer a ronda de guarda
 - expedition: explorar um lugar desconhecido (target opcional)
+- flirt: cortejar alguém. "target" = nome
+- confront: enfrentar/discutir com alguém (pode virar briga). "target" = nome
+- campaign: pedir apoio ao povo para ser rei
+- teach: ensinar um jovem. "target" = nome
+- leave: deixar a vila para sempre
+- ato: QUALQUER outra coisa que você queira tentar, descrita livremente em "intent" (roubar, mentir, fundar um culto, desafiar o rei...); o mestre decide o resultado com dados
 - wander: andar por aí
 - idle: ficar parado`;
 
@@ -165,6 +218,7 @@ export function buildPrompt(sim, a) {
   const L = [];
   L.push(`Você é ${a.name}, ${RACES[a.race].label} ${CLASSES[a.cls].label} nível ${a.lvl}, ${ROLE_LABEL[a.role] || 'morador'} de ${sim.name} (${describeTraits(a)}), alinhamento ${alignment(a)}.`);
   L.push(`Atributos: ${ABILITIES.map((k) => `${ABILITY_LABEL[k]} ${a.stats[k]} (${mod(a.stats[k]) >= 0 ? '+' : ''}${mod(a.stats[k])})`).join(', ')}. Aja como essa classe agiria: ${CLASSES[a.cls].desc}`);
+  { const m = mindOf(a), sp = a.spouse ? sim.byId(a.spouse) : null; L.push(`Você tem ${Math.floor(a.age)} anos${sp ? `, é casado(a) com ${sp.name}` : ''}. Humor: ${m.mood}.${m.goal ? ` Seu objetivo de vida: ${m.goal.text}.` : ''}`); }
   L.push(`Agora: dia ${sim.day()}, ${String(Math.floor(sim.hour())).padStart(2, '0')}h, ${sim.seasonName()}, clima: ${sim.weather.type}. ${sim.name} é ${sim.tierName().toLowerCase()} com ${sim.living().length} moradores${sim.king ? ` e rei ${sim.byId(sim.king)?.name}` : ''}.`);
   L.push(`Seu estado: fome ${Math.round(a.hunger)}/100 (100 = morrendo), cansaço ${Math.round(a.fatigue)}/100, solidão ${Math.round(a.loneliness)}/100, vida ${Math.round(a.hp)}/100.`);
   L.push(`Você carrega: ${a.inv.food} comida, ${a.inv.wood} madeira, ${a.inv.stone} pedra. ${a.home ? 'Você tem casa.' : 'Você NÃO tem casa.'}`);

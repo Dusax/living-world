@@ -4,8 +4,11 @@ import {
   T, K, KIND_NAME, DEFS, TPD, SEASONS, SEASON_DAYS, W, H,
 } from './world.js';
 import { bfs, cheb } from './path.js';
-import { makeAgent, randomName, ROLE_LABEL, CLASSES, RACES, mod, XP_TABLE, MAX_LEVEL, maxHpFor, rollSheet } from './agent.js';
-import { utilityDecide, keywordBias, templateLine, templateReply } from './brain.js';
+import { makeAgent, randomName, ROLE_LABEL, CLASSES, RACES, mod, XP_TABLE, MAX_LEVEL, maxHpFor, rollSheet, SURNAMES, ADULT_AGE } from './agent.js';
+import { dailyLife, onDeath, romanticTalk, gossip, isAdult, isKin, marry, romanceTarget } from './life.js';
+import { dailyMind, noteLife, setGoal, mindOf, newMind, buildMindPrompt, parseMind, chooseGoal, inferKind } from './mind.js';
+import { resolveFreeAct, ruleResolve } from './freewill.js';
+import { utilityDecide, keywordBias, templateLine, templateReply, romanticLine } from './brain.js';
 
 export const INV_CAP = 8;
 export const TIERS = ['Acampamento', 'Vila', 'Cidade', 'Reino'];
@@ -38,7 +41,7 @@ export class Sim {
     this.stats = { followers: 0, died: 0, felled: 0 };
     this._cache = {};
     const n = opts.agents ?? 2;
-    for (let i = 0; i < n; i++) { const a = this.spawnAgent(null, true); this.stats.followers++; a.hunger = 15; }
+    for (let i = 0; i < n; i++) { const a = this.spawnAgent(null, true, null, { age: 23 + i * 3, sex: i % 2 ? 'm' : 'f' }); this.stats.followers++; a.hunger = 15; }
     this.rebalanceRoles();
     this.log('info', `${n} moradores acenderam uma fogueira numa clareira.`);
   }
@@ -64,6 +67,8 @@ export class Sim {
   }
   // Fala do narrador: opts {prio, scene, at:[x,y], agent}
   beat(text, opts = {}) { if (this.onBeat) this.onBeat(text, opts); }
+  // Fato marcante: vai para a memória, muda o humor e faz a pessoa refletir de novo.
+  note(a, text, mood = null, hours = 24) { noteLife(this, a, text, mood, hours); }
   remember(a, text) { a.mem.push({ t: this.tick, day: this.day(), text }); if (a.mem.length > 40) a.mem.shift(); }
   hasResource(kind) {
     const c = this._cache;
@@ -81,7 +86,7 @@ export class Sim {
 
   // ---------- D&D: experiência e nível ----------
   gainXp(a, n) {
-    if (!a.alive || a.lvl >= MAX_LEVEL) return;
+    if (!a.alive || a.lvl >= MAX_LEVEL || a.age < ADULT_AGE) return;
     a.xp += n;
     while (a.lvl < MAX_LEVEL && a.xp >= XP_TABLE[a.lvl + 1]) {
       a.lvl++;
@@ -92,7 +97,7 @@ export class Sim {
     }
   }
   // ---------- população ----------
-  spawnAgent(name, near = false, at = null) {
+  spawnAgent(name, near = false, at = null, opts = {}) {
     const c = this.center;
     let x = c.x, y = c.y + 2;
     if (at) { x = at[0]; y = at[1]; } else {
@@ -101,7 +106,8 @@ export class Sim {
         if (isWalkable(this.world, nx, ny)) { x = nx; y = ny; break; }
       }
     }
-    const a = makeAgent(this, name || randomName(this), x, y);
+    const sex = opts.sex ?? (this.rng() < 0.5 ? 'f' : 'm');
+    const a = makeAgent(this, name || randomName(this, sex), x, y, { ...opts, sex });
     this.agents.push(a);
     this.assignHomes(); this.rebalanceRoles();
     return a;
@@ -115,7 +121,7 @@ export class Sim {
     list.forEach((nm, i) => {
       const idx = Math.max(0, trail.length - 1 - i * 2);
       const at = trail.length ? trail[idx] : null;
-      const a = this.spawnAgent(nm ? String(nm).slice(0, 16) : null, false, at);
+      const a = this.spawnAgent(nm ? String(nm).slice(0, 16) : null, false, at, { age: 17 + Math.floor(this.rng() * 30) });
       a.hunger = 25; this.stats.followers++;
       this.beginAct(a, { type: 'goto', gx: this.center.x, gy: this.center.y }, 'chegada');
       this.remember(a, `Cheguei a ${this.name} seguindo uma trilha pela mata.`);
@@ -130,16 +136,26 @@ export class Sim {
   }
 
   assignHomes() {
-    const counts = {};
-    for (const a of this.living()) if (a.home) counts[a.home] = (counts[a.home] || 0) + 1;
-    const houses = this.houses();
-    for (const a of this.living()) {
-      if (a.home && houses.some((s) => s.id === a.home)) continue;
+    const live = this.living(), houses = this.houses(), valid = (id) => houses.some((h) => h.id === id), counts = {};
+    for (const a of live) if (isAdult(a) && a.home && valid(a.home)) counts[a.home] = (counts[a.home] || 0) + 1;
+    for (const a of live) {
+      if (!isAdult(a) || (a.home && valid(a.home))) continue;
       a.home = null;
-      const h = houses.find((s) => (counts[s.id] || 0) < DEFS[s.type].cap);
+      const sp = a.spouse ? this.byId(a.spouse) : null;
+      if (sp && sp.home && valid(sp.home)) { a.home = sp.home; counts[sp.home] = (counts[sp.home] || 0) + 1; continue; }   // casal mora junto
+      const h = houses.find((x) => (counts[x.id] || 0) < DEFS[x.type].cap);
       if (h) { a.home = h.id; counts[h.id] = (counts[h.id] || 0) + 1; this.remember(a, `Agora tenho ${h.type === 'tent' ? 'uma tenda' : 'uma casa'} para chamar de minha.`); }
     }
+    for (const a of live) {   // crianças e adolescentes moram com os pais (ou com quem os acolheu)
+      if (isAdult(a) || (a.home && valid(a.home))) continue;
+      const par = [...(a.parents || []), a.guardian].map((id) => (id ? this.byId(id) : null)).find((p) => p && p.alive && p.home && valid(p.home));
+      a.home = par ? par.home : (houses[0] ? houses[0].id : null);
+    }
   }
+  // Quantas pessoas a lavoura sustenta: a vila só cresce (nascimentos, viajantes) até esse teto.
+  foodCap() { return this.structs('field').length * 3.3 + 4; }
+  adultCount() { return this.living().filter(isAdult).length; }
+  bedsFree() { return this.houses().reduce((sum, h) => sum + DEFS[h.type].cap, 0) - this.adultCount(); }
 
   // Cada morador exerce um ofício; novos moradores preenchem o que falta no povoado.
   roleAvailable(r) {
@@ -149,7 +165,8 @@ export class Sim {
     return true;
   }
   rebalanceRoles() {
-    const live = this.living().filter((a) => a.role !== 'rei');
+    for (const a of this.living()) { if (a.age >= 65 && a.role !== 'rei') a.role = 'anciao'; else if (a.age < ADULT_AGE) a.role = null; else if (a.role === 'anciao') a.role = null; }
+    const live = this.living().filter((a) => a.role !== 'rei' && a.age >= ADULT_AGE && a.age < 65);
     const pop = live.length;
     const wants = { ...ROLE_SHARES };
     for (const a of live) if (a.role && !this.roleAvailable(a.role)) a.role = null;
@@ -211,12 +228,11 @@ export class Sim {
   }
   queue() {
     const pop = this.living().length, count = (t) => this.structs(t).length;
-    const homeless = this.living().filter((a) => !a.home).length;
+    const homeless = this.living().filter((a) => !a.home && isAdult(a)).length;
     const q = [];
     if (this.forced) q.push(this.forced);
-    const beds = this.houses().reduce((sum, h) => sum + DEFS[h.type].cap, 0);
-    if (homeless > 0 || !count('cabin') || (pop >= 4 && pop < 60 && beds - pop < 2 && this.stock.food >= pop * 2)) q.push('cabin');
-    if (pop >= 2 && count('field') < Math.ceil(pop / 3)) q.push('field');
+    if (homeless > 0 || !count('cabin') || (pop >= 4 && pop < 80 && this.bedsFree() < 2 && this.stock.food >= pop * 2)) q.push('cabin');
+    if (pop >= 2 && count('field') < Math.ceil(pop / 2.6)) q.push('field');
     if (pop >= 4 && !count('well')) q.push('well');
     if (pop >= 6 && !count('barn')) q.push('barn');
     if (pop >= 10 && !count('forge')) q.push('forge');
@@ -367,7 +383,7 @@ export class Sim {
     if (this.tick % 3 === 0) this.moveAnimals();
     if (this.tick % 3 === 0) {
       for (const c of this.agents) {
-        if (!c.alive || c.cls !== 'clerigo') continue;
+        if (!c.alive || c.cls !== 'clerigo' || c.age < ADULT_AGE) continue;
         for (const o of this.agents) if (o.alive && o.hp < o.maxHp && cheb(o.x, o.y, c.x, c.y) <= 3) o.hp = Math.min(o.maxHp, o.hp + 1.5 + mod(c.stats.wis) * 0.5);
       }
     }
@@ -382,6 +398,8 @@ export class Sim {
     }
     if (this.day() % SEASON_DAYS === 1 && this.day() > 1) { this.log('event', `Chegou ${this.seasonName()}.`); this.beat(`Chegou ${this.seasonName().toLowerCase()} em ${this.name}.`, { prio: 0 }); }
     for (const a of this.living()) this.gainXp(a, 1);
+    dailyLife(this);
+    dailyMind(this);
     this.kingClamor();
     this.immigration();
     this.rebalanceRoles();
@@ -407,11 +425,11 @@ export class Sim {
   // Viajantes chegam sozinhos quando a vila tem comida e lugar para dormir: o mundo cresce sem você fazer nada.
   immigration() {
     const pop = this.living().length;
-    if (pop >= 60) return;
-    const beds = this.houses().reduce((sum, h) => sum + DEFS[h.type].cap, 0), room = beds - pop;
-    const fed = this.stock.food >= Math.max(8, pop * 2.5);
+    if (pop >= 80) return;
+    const room = this.bedsFree();
+    const fed = this.stock.food >= Math.max(8, pop * 3.5) && pop < this.foodCap();
     if ((room < 1 && pop >= 4) || !fed || this.day() < 2) return;
-    if (this.rng() > (pop < 6 ? 0.75 : pop < 20 ? 0.5 : 0.35)) return;
+    if (this.rng() > (pop < 6 ? 0.75 : pop < 20 ? 0.5 : pop < 40 ? 0.3 : 0.15)) return;
     const n = Math.min(Math.max(1, room), 1 + (this.rng() < 0.4 ? 1 : 0) + (this.rng() < 0.15 ? 2 : 0));
     this.addFollowers(Array(n).fill(null));
   }
@@ -427,8 +445,8 @@ export class Sim {
         this.beat(`O povo de ${this.name} quer um rei.`, { prio: 3 });
       }
     } else if (this.poll && this.poll.kind === 'king' && this.poll.auto && this.day() - this.poll.opened >= 2) {
-      const live = this.living();
-      for (const v of live) {   // cada morador vota em quem mais admira (laços + carisma)
+      const live = this.living().filter(isAdult);
+      for (const v of live) {   // cada adulto vota em quem mais admira (laços + carisma)
         let best = 0, bs = -1e9;
         this.poll.options.forEach((o, i) => { const c = this.byId(o.payload.agent); if (!c || c === v) return; const sc = (v.rel[c.id] || 0) + mod(c.stats.cha) * 6 + this.rng() * 25; if (sc > bs) { bs = sc; best = i; } });
         this.vote(best, 1);
@@ -491,6 +509,7 @@ export class Sim {
       this.endAct(a); this.beginAct(a, { type: 'eat' }, 'reflexo');
       this.remember(a, 'A fome apertou demais. Larguei tudo para comer.');
     }
+    this.maybeDeliberate(a);
     if (a.pending) {
       if (Date.now() - a.pending.at > LLM_TIMEOUT_MS) a.pending = null;
       else { a.thought = 'Pensando…'; return; }
@@ -500,28 +519,51 @@ export class Sim {
   }
   updateNeeds(a) {
     const winter = this.season() === 3;
-    a.hunger = Math.min(100, a.hunger + (winter ? 0.6 : 0.5) * (a.sleeping ? 0.6 : 1));
-    a.fatigue = a.sleeping ? Math.max(0, a.fatigue - 1.6) : Math.min(100, a.fatigue + 0.3);
+    a.hunger = Math.min(100, a.hunger + (winter ? 0.6 : 0.5) * (a.sleeping ? 0.6 : 1) * (a.age < 12 ? 0.75 : 1));
+    a.fatigue = a.sleeping ? Math.max(0, a.fatigue - 1.6) : Math.min(100, a.fatigue + 0.3 * (a.age >= 65 ? 1.35 : 1));
     a.loneliness = Math.min(100, a.loneliness + 0.2 * (0.5 + a.traits.sociability));
     if (a.hunger >= 100) a.hp -= 2; else if (a.fatigue >= 100) a.hp -= 0.5;
     else if (a.hunger < 60 && a.fatigue < 70) a.hp = Math.min(a.maxHp, a.hp + 0.3);
     if (a.hp <= 0) this.kill(a, a.hunger >= 100 ? 'de fome' : a.fatigue >= 100 ? 'de exaustão' : 'de ferimentos');
   }
-  kill(a, cause) {
+  kill(a, cause, text) {
     if (!a.alive) return;
     a.alive = false; a.died = this.tick; a.sleeping = false; a.act = null; a.pending = null;
     this.graves.push({ x: a.x, y: a.y, name: a.name, day: this.day() });
     this.stats.died++;
     if (this.king === a.id) this.king = null;
-    this.log('death', `${a.name} morreu ${cause}.`, a.id);
-    this.beat(`${a.name} não resistiu. Morreu ${cause}.`, { prio: 2, agent: a.id, at: [a.x, a.y] });
+    this.log('death', text || `${a.name} morreu ${cause}.`, a.id);
+    this.beat(text || `${a.name} não resistiu. Morreu ${cause}.`, { prio: 2, agent: a.id, at: [a.x, a.y] });
+    onDeath(this, a, cause);
     for (const o of this.living()) { this.remember(o, `${a.name} morreu ${cause}.`); if ((o.rel[a.id] || 0) > 40) o.loneliness = Math.min(100, o.loneliness + 30); }
     this.assignHomes(); this.rebalanceRoles();
   }
 
+  // ---------- consciência: reflexão (assíncrona, não trava o corpo) ----------
+  maybeDeliberate(a) {
+    const l = this.llm;
+    if (!l || !l.enabled || a.age < 6 || a.delib || !l.deliberate) return;
+    const m = mindOf(a);
+    if (!m.dirty && this.tick < m.next) return;
+    if (!l.ready()) return;
+    a.delib = true; m.dirty = false; m.next = this.tick + TPD * 2 + Math.floor(this.rng() * TPD);
+    l.begin();
+    l.deliberate(this, a).then((res) => { a.delib = false; if (a.alive && res) this.applyMind(a, res); })
+      .catch((e) => { a.delib = false; m.dirty = true; m.next = this.tick + TPD / 2; l.fail?.(e); })
+      .finally(() => l.end());
+  }
+  applyMind(a, res) {
+    const m = mindOf(a);
+    if (res.thought) { m.thought = res.thought; a.thought = res.thought; this.remember(a, `Refleti: ${res.thought}`); }
+    if (res.mood) { m.mood = res.mood; m.moodUntil = this.tick + TPD * 2; }
+    if (res.summary) m.summary = res.summary;
+    if (res.goal) { const t = res.goal.target ? this.byName(res.goal.target) : null; setGoal(this, a, { kind: res.goal.kind, target: t ? t.id : null, text: res.goal.text }, 'mente'); }
+    if (res.action && !a.pending) this.applyDecision(a, res.action, 'consciência');
+  }
+
   // ---------- decisão ----------
   decide(a) {
-    if (this.llm && this.llm.ready() && (!this.llm.wants || this.llm.wants(this, a))) {
+    if (this.llm && a.age >= 6 && this.llm.ready() && (!this.llm.wants || this.llm.wants(this, a))) {
       a.pending = { at: Date.now() };
       this.llm.begin();
       this.llm.decide(this, a).then((d) => {
@@ -553,12 +595,17 @@ export class Sim {
       }
       case 'farm': { const f = this.farmTarget(a); if (!f) return false; spec.fieldId = f.id; break; }
       case 'eat': if (!this.foodAvailable(a)) return false; break;
-      case 'talk': case 'give': {
-        const t = this.byName(d.target);
+      case 'talk': case 'give': case 'flirt': {
+        const t = this.byName(d.target) || (d.type === 'flirt' ? romanceTarget(this, a) : null);
         if (!t || t === a) return false;
         if (d.type === 'give' && a.inv.food < 1) return false;
+        if (d.type === 'flirt' || d.romantic) { if (a.age < 18 || t.age < 18 || isKin(a, t)) return false; spec.type = 'talk'; spec.romance = true; }
         spec.targetId = t.id; spec.say = d.say; break;
       }
+      case 'confront': { const t = this.byName(d.target); if (!t || t === a || a.age < 8) return false; spec.targetId = t.id; break; }
+      case 'campaign': { if (a.age < 12) return false; const t = this.byName(d.target) || this.living().filter((o) => o !== a && o.age >= ADULT_AGE && !o.sleeping)[Math.floor(this.rng() * 5) % Math.max(1, this.living().length - 1)]; if (!t || t === a) return false; spec.targetId = t.id; break; }
+      case 'teach': { const t = this.byName(d.target) || this.living().filter((o) => o.age < ADULT_AGE && o.age >= 3)[0]; if (!t || t === a || t.age >= a.age || a.age < 12) return false; spec.targetId = t.id; break; }
+      case 'leave': { if (a.age < 12 || this.living().some((o) => o.age < 12 && (o.parents || []).includes(a.id))) return false; break; }
       case 'build': { const p = this.nextProject(); if (!p) return false; spec.project = { type: p.type, site: p.site }; break; }
       case 'smith': if (!this.struct('forge') || this.stock.wood < 2 || this.stock.stone < 1) return false; break;
       case 'store': if (!(a.inv.wood + a.inv.stone + a.inv.food > 0)) return false; break;
@@ -571,7 +618,15 @@ export class Sim {
       case 'wander': case 'explore': spec.type = 'wander'; spec.far = !!d.far || d.type === 'explore'; break;
       case 'sleep': case 'idle': break;
       case 'goto': spec.gx = d.gx; spec.gy = d.gy; break;
-      default: return false;
+      case 'ato': {
+        const intent = String(d.intent || d.say || d.target || '').trim(); if (!intent) return false;
+        const t = d.target ? this.byName(d.target) : null; if (t && t !== a) spec.targetId = t.id;
+        spec.intent = intent; break;
+      }
+      default: {   // livre-arbítrio: qualquer outra ideia vira um ato, resolvido pelo mestre
+        const intent = [d.type, d.target, d.say, d.intent].filter(Boolean).join(' ').trim(); if (!intent || /^(none|null|undefined)$/i.test(intent)) return false;
+        const t = d.target ? this.byName(d.target) : null; spec.type = 'ato'; spec.intent = intent; if (t && t !== a) spec.targetId = t.id; break;
+      }
     }
     a.thought = d.thought || a.thought;
     this.beginAct(a, spec, source);
@@ -791,15 +846,37 @@ export class Sim {
         return;
       }
 
-      case 'talk': case 'give': {
+      case 'ato': {
+        const t = act.targetId ? this.byId(act.targetId) : null;
+        if (t && t.alive) { const r = this.moveTo(a, act, (x, y) => cheb(x, y, t.x, t.y) <= 1); if (r === 'fail') return this.failAct(a, `não alcancei ${t.name}`); if (r === 'moving') return; }
+        if (!act.started2) {
+          act.started2 = true; act.waitStart = Date.now();
+          if (this.llm && this.llm.enabled && this.llm.adjudicate && this.llm.ready()) {
+            this.llm.begin();
+            this.llm.adjudicate(this, a, t, act.intent).then((r) => { act.res = r || null; }).catch(() => { act.res = null; }).finally(() => this.llm && this.llm.end());
+          } else act.res = null;
+        }
+        if (act.res === undefined) { if (Date.now() - act.waitStart < 20000) return; act.res = null; }
+        resolveFreeAct(this, a, t, act.intent, act.res);
+        return this.doneAct(a);
+      }
+
+      case 'leave': {
+        const end = (w.trails.find((x) => x.id === 'cachoeira')?.tiles || []).at(-1) || [this.center.x, this.center.y];
+        const r = this.moveTo(a, act, (x, y) => x === end[0] && y === end[1]);
+        if (r === 'arrived') return this.emigrate(a); if (r === 'fail') return this.failAct(a, 'a trilha está bloqueada');
+        return;
+      }
+
+      case 'talk': case 'give': case 'confront': case 'campaign': case 'teach': {
         const t = this.byId(act.targetId);
         if (!t || !t.alive) return this.failAct(a, 'a pessoa sumiu');
-        if (act.type === 'talk' && t.sleeping) return this.failAct(a, `${t.name} está dormindo`);
+        if (act.type !== 'give' && t.sleeping) return this.failAct(a, `${t.name} está dormindo`);
         if (act.moves % 3 === 2) act.path = null;
         const r = this.moveTo(a, act, (x, y) => cheb(x, y, t.x, t.y) <= 1);
         if (r === 'fail') return this.failAct(a, `não alcancei ${t.name}`);
         if (r === 'moving') return;
-        return act.type === 'talk' ? this.doTalk(a, t, act) : this.doGive(a, t, act);
+        return act.type === 'talk' ? this.doTalk(a, t, act) : act.type === 'give' ? this.doGive(a, t, act) : this.doSocial(a, t, act);
       }
 
       case 'build': return this.runBuild(a, act);
@@ -871,7 +948,7 @@ export class Sim {
   }
 
   doTalk(a, t, act) {
-    if (act.work === 0) { const line = act.say || templateLine(this, a, t); this.say(a, line); this.log('talk', `${a.name} → ${t.name}: “${line}”`, a.id); }
+    if (act.work === 0) { const line = act.say || (act.romance ? romanticLine(this, a, t) : templateLine(this, a, t)); this.say(a, line); this.log('talk', `${a.name} → ${t.name}: “${line}”`, a.id); }
     if (act.work === 1) { const reply = templateReply(this, t, a); this.say(t, reply); this.log('talk', `${t.name}: “${reply}”`, t.id); }
     act.work++;
     if (act.work < 3) return;
@@ -879,11 +956,48 @@ export class Sim {
     let delta = 4 + (ka + kt) * 4 + Math.max(0, mod(a.stats.cha)) * 0.8;
     if (a.cls === 'bardo' || t.cls === 'bardo') delta *= 1.6;
     this.gainXp(a, 1);
-    if (this.rng() < 0.15 && (a.traits.bravery + t.traits.bravery) / 2 > 0.55 && (ka + kt) / 2 < 0.5) { delta = -12; this.log('conflict', `${a.name} e ${t.name} discutiram.`, a.id); }
+    if (this.rng() < 0.15 && (a.traits.bravery + t.traits.bravery) / 2 > 0.55 && (ka + kt) / 2 < 0.5) { delta = -12; if (this.rng() < 0.3) this.log('conflict', `${a.name} e ${t.name} discutiram.`, a.id); }
     this.bond(a, t, delta); this.bond(t, a, delta);
     a.loneliness = Math.max(0, a.loneliness - 40); t.loneliness = Math.max(0, t.loneliness - 30);
     this.remember(a, `Conversei com ${t.name}.`); this.remember(t, `${a.name} veio conversar comigo.`);
+    if (act.romance) romanticTalk(this, a, t); else if (isAdult(a) && isAdult(t)) gossip(this, a, t);
     this.doneAct(a);
+  }
+  // Enfrentar, fazer campanha ou ensinar: conversas com intenção.
+  doSocial(a, t, act) {
+    act.work++;
+    if (act.work === 1) {
+      const lines = { confront: [`Precisamos conversar, ${t.name}. Você passou dos limites.`, `Chega, ${t.name}. Vamos resolver isso agora.`], campaign: [`${t.name}, a vila precisa de um rei. Posso contar com você?`, `Pense em mim como rei, ${t.name}.`], teach: [`Vem cá, ${t.name}. Deixa eu te mostrar como se faz.`, `Presta atenção, ${t.name}. Um dia isso vai salvar você.`] };
+      const line = act.say || lines[act.type][Math.floor(this.rng() * 2)]; this.say(a, line); this.log('talk', `${a.name} → ${t.name}: “${line}”`, a.id);
+    }
+    if (act.work < 3) return;
+    const m = mindOf(a);
+    if (act.type === 'confront') {
+      this.bond(a, t, -10); this.bond(t, a, -12); m.goal && m.goal.kind === 'vingar' && (m.goal.progress = (m.goal.progress || 0) + 1);
+      this.log('conflict', `🔥 ${a.name} enfrentou ${t.name}.`, a.id);
+      this.note(t, `${a.name} me enfrentou diante de todos.`, 'irritado', 12);
+      if (((a.rel[t.id] || 0) < -55 && a.traits.bravery > 0.45 && this.rng() < 0.35) || this.rng() < 0.08) {
+        const hit = (x) => 8 + Math.max(0, mod(x.stats.str)) * 3 + this.rng() * 12;
+        t.hp -= hit(a); a.hp -= hit(t) * 0.7;
+        this.log('conflict', `⚔ ${a.name} e ${t.name} brigaram.`, a.id);
+        if (t.hp <= 0) { this.beat(`${a.name} e ${t.name} brigaram. ${t.name} não sobreviveu.`, { prio: 3, agent: t.id }); this.kill(t, 'numa briga'); }
+        else if (a.hp <= 0) { this.beat(`${a.name} e ${t.name} brigaram. ${a.name} não sobreviveu.`, { prio: 3, agent: a.id }); this.kill(a, 'numa briga'); }
+      }
+    } else if (act.type === 'campaign') {
+      t.rel[a.id] = Math.min(100, (t.rel[a.id] || 0) + 5 + Math.max(0, mod(a.stats.cha)) * 1.5); m.campaign = (m.campaign || 0) + 1;
+      if (this.rng() < 0.3) this.log('intrigue', `🗳 ${a.name} pediu o apoio de ${t.name} para ser rei.`, a.id);
+      this.remember(t, `${a.name} quer ser rei e pediu meu apoio.`);
+    } else {
+      mindOf(t).taught = (mindOf(t).taught || 0) + 1; this.bond(a, t, 8); this.bond(t, a, 8); this.gainXp(a, 2);
+      this.remember(t, `${a.name} me ensinou algo valioso.`);
+    }
+    this.doneAct(a);
+  }
+  emigrate(a) {
+    a.alive = false; a.left = true; a.act = null; a.sleeping = false; this.stats.left = (this.stats.left || 0) + 1;
+    this.log('event', `🚶 ${a.name} deixou ${this.name} para sempre.`, a.id);
+    this.beat(`${a.name} deixou ${this.name} para sempre. Seguiu pela trilha sem olhar para trás.`, { prio: 3, agent: a.id });
+    onDeath(this, a, '__left'); this.assignHomes(); this.rebalanceRoles();
   }
   bond(a, t, delta) {
     const before = a.rel[t.id] || 0, after = Math.max(-100, Math.min(100, before + delta));
@@ -909,8 +1023,8 @@ export class Sim {
     const live = this.living();
     let q, options;
     if (kind === 'king') {
-      const score = (a) => Object.values(a.rel).reduce((s, v) => s + v, 0) + a.traits.sociability * 30 + a.traits.bravery * 20 + mod(a.stats.cha) * 8 + a.lvl * 6 + (a.cls === 'paladino' ? 15 : 0);
-      options = live.slice().sort((x, y) => score(y) - score(x)).slice(0, 4).map((a) => ({ label: a.name, payload: { agent: a.id } }));
+      const score = (a) => Object.values(a.rel).reduce((s, v) => s + v, 0) + a.traits.sociability * 30 + a.traits.bravery * 20 + mod(a.stats.cha) * 8 + a.lvl * 6 + (a.cls === 'paladino' ? 15 : 0) + (mindOf(a).campaign || 0) * 4;
+      options = live.filter((a) => a.age >= 18 && a.age < 70).sort((x, y) => score(y) - score(x)).slice(0, 4).map((a) => ({ label: a.name, payload: { agent: a.id } }));
       q = `Quem será o rei de ${this.name}?`;
     } else if (kind === 'build') {
       const types = ['tower', 'market', 'library', 'forge', 'barn', 'well', 'castle', 'cabin'].filter((t) => !(t === 'castle' && this.structs('castle').length) && !(['forge', 'barn', 'well', 'library'].includes(t) && this.structs(t).length));
@@ -976,6 +1090,17 @@ export class Sim {
     if (ok) this.log('god', `✦ ${a.name} foi guiado pelo deus.`, a.id);
     return ok;
   }
+  // Cupido: faz os dois se apaixonarem (se puderem).
+  cupid(a, b) {
+    if (!a || !b || a === b || a.age < 18 || b.age < 18 || isKin(a, b)) return false;
+    a.love[b.id] = Math.max(a.love[b.id] || 0, 85); b.love[a.id] = Math.max(b.love[a.id] || 0, 85);
+    this.bond(a, b, 30); this.bond(b, a, 30);
+    this.log('god', `💘 ${a.name} e ${b.name} se apaixonaram de repente.`, a.id);
+    this.remember(a, `Senti o coração disparar por ${b.name}.`); this.remember(b, `Senti o coração disparar por ${a.name}.`);
+    if (!a.spouse && !b.spouse) marry(this, a, b);
+    return true;
+  }
+  setLifeGoal(a, text) { setGoal(this, a, { kind: inferKind(text) || 'livre', text }, 'mente'); mindOf(a).dirty = true; }
   smite(a) { a.hp -= 50; this.log('god', `⚡ ${a.name} foi atingido por um raio!`, a.id); this.remember(a, 'Um raio caiu do céu sobre mim!'); if (a.hp <= 0) this.kill(a, 'por um raio'); }
   bless(a) { a.hp = a.maxHp; a.hunger = Math.min(a.hunger, 20); a.fatigue = Math.min(a.fatigue, 20); this.log('god', `✨ ${a.name} foi abençoado.`, a.id); this.remember(a, 'Uma luz quente me envolveu. Estou renovado.'); }
 
@@ -1048,7 +1173,11 @@ export class Sim {
     s.decreeText = j.decreeText; s.decreeUntil = j.decreeUntil; s.stats = j.stats; s.graves = j.graves; s.logs = j.logs;
     s.king = j.king; s.forced = j.forced; s.firsts = j.firsts; s.lastTier = j.lastTier; s.animals = j.animals; s.plot = j.plot || null;
     s.agents = j.agents.map((a) => ({ ...a, pending: null }));
-    for (const a of s.agents) if (!a.cls) { rollSheet(s, a); a.hp = Math.min(a.hp, a.maxHp); }
+    for (const a of s.agents) {
+      if (!a.cls) { rollSheet(s, a); a.hp = Math.min(a.hp, a.maxHp); }
+      if (a.age === undefined) { a.age = 24 + (a.id % 20); a.sex = a.id % 2 ? 'm' : 'f'; a.fam = SURNAMES[a.id % SURNAMES.length]; a.parents = []; a.kids = []; a.spouse = null; a.love = {}; a.affair = null; a.preg = null; a.marriedTick = 0; a.guardian = null; }
+      if (!a.mind) a.mind = newMind();
+    }
     s.clamorDay = j.clamorDay || 0;
     const w = s.world, jw = j.world;
     w.tile.set(jw.tile); w.rk.set(jw.rk); w.ra.set(jw.ra); w.rm.set(jw.rm); w.occ.set(jw.occ); w.trail.set(jw.trail);
@@ -1076,7 +1205,12 @@ export function describeAct(sim, spec) {
     case 'farm': return 'cuidar do campo';
     case 'eat': return 'comer';
     case 'sleep': return 'dormir';
-    case 'talk': return `conversar com ${sim.byId(spec.targetId)?.name ?? '?'}`;
+    case 'talk': return spec.romance ? `flertar com ${sim.byId(spec.targetId)?.name ?? '?'}` : `conversar com ${sim.byId(spec.targetId)?.name ?? '?'}`;
+    case 'ato': return `tentar: ${spec.intent}`;
+    case 'confront': return `enfrentar ${sim.byId(spec.targetId)?.name ?? '?'}`;
+    case 'campaign': return `pedir apoio para ser rei a ${sim.byId(spec.targetId)?.name ?? '?'}`;
+    case 'teach': return `ensinar ${sim.byId(spec.targetId)?.name ?? '?'}`;
+    case 'leave': return 'deixar a vila para sempre';
     case 'give': return `dar comida a ${sim.byId(spec.targetId)?.name ?? '?'}`;
     case 'build': return `construir ${buildingName(spec.project?.type)}`;
     case 'store': return 'guardar no armazém';
