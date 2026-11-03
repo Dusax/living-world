@@ -195,7 +195,7 @@ $('#scriptBtn').onclick = async () => {
 let recorder = null, chunks = [];
 $('#recBtn').onclick = () => {
   if (recorder) { recorder.stop(); return; }
-  if (!canvas.captureStream || !window.MediaRecorder) { alert('Seu navegador não suporta gravação do canvas.'); return; }
+  if (!canvas.captureStream || !window.MediaRecorder) { sim.log('info', 'Este navegador não suporta gravação do canvas.'); return; }
   const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find((m) => MediaRecorder.isTypeSupported(m));
   recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6e6 });
   chunks = []; recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
@@ -215,8 +215,13 @@ function renderLLM() { const s = llm.stats; $('#llmStats').textContent = `Chamad
 llm.onChange = renderLLM;
 
 $('#saveBtn').onclick = () => { $('#saveBtn').textContent = save() ? '✅ Salvo' : '❌ Falhou'; setTimeout(() => ($('#saveBtn').textContent = '💾 Salvar'), 1500); };
-$('#loadBtn').onclick = () => { if (!load()) alert('Nenhum jogo salvo.'); };
-$('#newBtn').onclick = () => { if (confirm('Criar um novo mundo? O atual será perdido (a menos que você tenha salvo).')) newWorld(); };
+$('#loadBtn').onclick = () => { if (!load()) sim.log('info', 'Nenhum jogo salvo ainda.'); };
+let newArmed = 0;
+$('#newBtn').onclick = () => {   // confirmação na própria tela (confirm() não existe em páginas publicadas)
+  if (performance.now() < newArmed) { newArmed = 0; $('#newBtn').textContent = '🌍 Novo mundo'; newWorld(); return; }
+  newArmed = performance.now() + 4000; $('#newBtn').textContent = 'Clique de novo: perde o mundo atual';
+  setTimeout(() => { if (performance.now() >= newArmed) $('#newBtn').textContent = '🌍 Novo mundo'; }, 4100);
+};
 $('#exportBtn').onclick = () => {
   const text = sim.logs.map((l) => `[dia ${l.day} ${String(l.hour).padStart(2, '0')}h] ${l.text}`).join('\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' })); a.download = `cronica-dia-${sim.day()}.txt`; a.click(); URL.revokeObjectURL(a.href);
