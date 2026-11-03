@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mundo Vivo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <h1>🏝 Mundo Vivo</h1>
+  <div id="clock">…</div>
+  <div id="speed">
+    <button id="btnPause" title="Espaço">⏸</button>
+    <button data-speed="1" class="on">1×</button>
+    <button data-speed="2">2×</button>
+    <button data-speed="4">4×</button>
+    <button data-speed="8">8×</button>
+  </div>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="toolhint" hidden></div>
+  </div>
+  <aside id="side">
+    <details open>
+      <summary>Povoado</summary>
+      <div id="town"></div>
+      <div id="people"></div>
+    </details>
+
+    <details open id="cardBox">
+      <summary>Habitante</summary>
+      <div id="cardBody" class="muted">Clique em alguém no mapa (ou na lista) para ver a mente dessa pessoa.</div>
+      <div id="cardCtl" hidden>
+        <div class="row">
+          <input id="whisperIn" placeholder="Sussurrar uma ideia só para ela…" maxlength="140">
+          <button id="whisperBtn">Sussurrar</button>
+        </div>
+        <div class="row">
+          <select id="orderSel">
+            <option value="gather:food">Colher comida</option>
+            <option value="gather:wood">Cortar madeira</option>
+            <option value="gather:stone">Pegar pedra</option>
+            <option value="eat">Comer</option>
+            <option value="sleep">Dormir</option>
+            <option value="build">Construir casa</option>
+            <option value="store">Guardar no armazém</option>
+            <option value="wander">Explorar</option>
+          </select>
+          <button id="orderBtn">Ordenar</button>
+        </div>
+        <div class="row">
+          <button id="followBtn">🎥 Seguir</button>
+          <button id="blessBtn">✨ Abençoar</button>
+          <button id="smiteBtn" class="danger">⚡ Raio</button>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Poderes divinos</summary>
+      <div class="row">
+        <input id="decreeIn" placeholder="Decreto para TODOS (ex.: construam casas)" maxlength="140">
+        <button id="decreeBtn">Decretar</button>
+      </div>
+      <div class="btns" id="events">
+        <button data-event="chuva">🌧 Chuva</button>
+        <button data-event="seca">☀ Seca</button>
+        <button data-event="colheita">🌾 Colheita</button>
+        <button data-event="dadiva">🎁 Dádiva</button>
+        <button data-event="forasteiro">🧳 Forasteiro</button>
+        <button data-event="praga" class="danger">☣ Praga</button>
+        <button data-event="meteoro" class="danger">☄ Meteoro</button>
+      </div>
+      <div class="muted small">Ferramentas (clique no mapa):</div>
+      <div class="btns" id="tools">
+        <button data-tool="select" class="on">👆 Selecionar</button>
+        <button data-tool="goto">📍 Mandar ir</button>
+        <button data-tool="tree">🌳 Árvore</button>
+        <button data-tool="bush">🍓 Arbusto</button>
+        <button data-tool="stone">🪨 Pedra</button>
+        <button data-tool="house">🏠 Casa</button>
+        <button data-tool="meteor" class="danger">☄ Meteoro aqui</button>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Crônica</summary>
+      <div class="row"><button id="narrate">📜 Contar o dia</button></div>
+      <div id="narr" class="narr" hidden></div>
+      <div id="log"></div>
+    </details>
+
+    <details>
+      <summary>IA (Claude) e jogo</summary>
+      <p class="small muted">Sem chave, os habitantes decidem por <b>instinto</b> (regras + personalidade). Com chave, cada decisão vira uma chamada ao Claude, que interpreta a pessoa. A chave fica só neste navegador e vai direto para a Anthropic.</p>
+      <label class="row"><input type="checkbox" id="llmOn"> Usar Claude como mente</label>
+      <div class="row"><input id="llmKey" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
+      <div class="row"><select id="llmModel"></select></div>
+      <div id="llmStats" class="small muted"></div>
+      <div class="btns">
+        <button id="saveBtn">💾 Salvar</button>
+        <button id="loadBtn">📂 Carregar</button>
+        <button id="exportBtn">⬇ Exportar crônica</button>
+        <button id="newBtn" class="danger">🌍 Novo mundo</button>
+      </div>
+    </details>
+  </aside>
+</main>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
