@@ -58,3 +58,5 @@ textarea { width: 100%; font: inherit; color: var(--fg); background: #1d2840; bo
 .sheet div { background: #121a2b; border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 3px 0; font-size: 11px; color: var(--mut); }
 .sheet b { display: block; font-size: 14px; color: var(--fg); }
 #log .level { color: #f7e19c; } #log .conflict { color: #ff9f6b; }
+#log .wedding { color: #ffb3d9; } #log .intrigue { color: #ff9f6b; } #log .secret { color: #b79bff; } #log .mind { color: #9fd0ff; } #log .birth { color: #8be0a8; }
+#log .free { color: #ffd479; }

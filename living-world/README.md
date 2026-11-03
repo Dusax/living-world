@@ -1,8 +1,6 @@
 # 🏕 Mundo Vivo
 
-Uma vila em pixel art que **cresce sozinha**: cada **seguidor vira um morador**, e os moradores decidem sozinhos o que fazer (cortar madeira, plantar, minerar, forjar, construir, vigiar, explorar, conversar, brigar…). Você é o **deus**: decreta, sussurra, vota, manda, abençoa, castiga e derruba meteoros. O jogo narra a própria história em **legendas de vídeo vertical (9:16)** e **grava clipes** prontos para postar.
-
-> Interpretação própria do formato "mundo de IA com seguidores como moradores". Não é cópia de nenhum perfil.
+Um jogo para você assistir e interferir: uma vila em pixel art que **cresce sozinha**. Dois moradores acendem uma fogueira numa clareira e, se houver comida e lugar para dormir, **viajantes chegam por conta própria**. Eles têm ficha de D&D, decidem o que fazer (cortar madeira, plantar, minerar, forjar, construir, vigiar, explorar, conversar, brigar…) e você é o **deus**: decreta, sussurra, manda, abençoa, castiga e derruba meteoros. O jogo narra a própria história em legendas de vídeo vertical (9:16) e grava clipes.
 
 ## Rodar
 
@@ -22,13 +20,13 @@ Não abra o `index.html` direto (`file://`): módulos ES precisam de um servidor
 - Dia/noite, estações (o inverno é duro: estoque no outono), chuva, seca. Fome, cansaço, solidão; há mortes.
 - **Ofícios**: lenhador, fazendeiro, mineiro, mestre de obras, ferreiro, guarda, explorador, rei.
 
-## Seguidores = moradores
+## Crescimento
 
-Painel **Seguidores**: cole os @ reais de quem te segue (um por linha) e eles chegam em **caravana**, em fila pela trilha da montanha. Com 2 seguidores é um acampamento; com 40, um reino.
+Viajantes chegam sozinhos em fila pela trilha da montanha, quando há comida no armazém e camas livres (e a vila constrói mais cabanas quando as camas acabam). Em ~60 dias de jogo (cerca de 24 min em 1×) costuma passar de 30 moradores. Você também pode chamar gente na hora, com ou sem nome, no painel **Chamar moradores**.
 
-## Votação ("stories")
+## Votação
 
-**Eleger rei**, **próxima obra**, **expedição**. Você abre a votação, soma os votos que vieram dos stories (+1/+5) e encerra; o resultado vira história e muda o mundo. A votação também aparece no vídeo.
+**Eleger rei**, **próxima obra**, **expedição**. Você abre a votação e escolhe o vencedor (ou soma votos e encerra); o resultado vira história e muda o mundo. Também aparece no vídeo.
 
 ## Moradores estilo D&D
 
@@ -38,12 +36,31 @@ A classe muda o jeito de viver: bárbaro corta mais madeira, patrulheiro acha ma
 
 **Rei por clamor popular:** numa cidade grande, depois de alguns dias, o povo pede um rei. Abre-se uma votação (candidatos por carisma, nível e laços). Se você não decidir em 2 dias, o povo vota sozinho.
 
+## Vida real
+
+Os moradores têm **idade** (1 ano = 3 dias de jogo), **sexo**, **sobrenome/família** e envelhecem de verdade:
+
+- **Amor e casamento:** flertam, se apaixonam, se casam (casal mora junto), têm **filhos** (gravidez de ~2 dias, gêmeos raros) que herdam atributos, personalidade e vocação dos pais.
+- **Crianças crescem:** são menores no mapa, brincam, aprendem com os mais velhos e aos 16 anos recebem a classe e entram na vida adulta. Idosos têm cabelo branco e trabalham menos.
+- **Morte por velhice** (a partir dos 55, crescendo com a idade), luto de quem fica, órfãos acolhidos por alguém da vila.
+- **Traição e intriga:** casos secretos (você vê no cartão, como deus), descobertos mais cedo ou mais tarde, com divórcio, briga ou perdão; boatos; rejeição; **golpe contra o rei impopular**; quem decide **ir embora para sempre**.
+- Só a vila que a lavoura sustenta cresce: nascimentos e viajantes dependem de comida e camas. Romance e casamento só entre adultos.
+- **Cupido** (ferramenta): faz dois adultos se apaixonarem.
+
+## Consciência e livre-arbítrio
+
+Cada morador tem **humor**, **memória de longo prazo** (momentos marcantes e um resumo da própria história) e um **objetivo de vida escrito nas próprias palavras**, que ele muda quando a vida muda: casar, ser rei, vingar-se, explorar, proteger a família, partir… ou qualquer coisa. Os tipos de objetivo e de ação são só **sugestões**.
+
+- **Sem IA:** os objetivos nascem das regras (personalidade, classe, o que viveu) e o instinto os persegue.
+- **Com IA:** cada pessoa **reflete** periodicamente (sem travar o corpo) e decide como se sente, o que quer e o que faz. Pode escolher **qualquer ato** (`ato` com `intent` livre: roubar, mentir, envenenar, fundar um culto, desafiar o rei, pedir perdão, sabotar…). Um **mestre estilo D&D** (a IA) decide habilidade e CD e os efeitos de sucesso e falha; o jogo **rola o d20** e aplica as consequências (opiniões, amor, ferimentos, mortes, humor, objetivos). Sem IA, um mestre de regras faz esse papel.
+- O que sobra de limite é físico (fome, cansaço, ferimentos) e uma única trava de conteúdo: romance e casamento só entre adultos.
+
 ## Quem decide pelos moradores (mentes)
 
 | Cérebro | Como funciona | Custo |
 |---|---|---|
 | **Instinto** (padrão) | Utilidade ponderada: necessidades × personalidade × classe × ofício × estado do povoado × sua influência | Grátis, offline |
-| **Mentes (IA)** | Um **pool** de provedores: Gemini (AI Studio), Groq, OpenRouter, Ollama local, qualquer URL compatível com OpenAI, ou Claude. Cada um tem limite por minuto e por dia (editável) | Pode ser 100% grátis |
+| **Mentes (IA)** | Reflexão, decisões e mestre de jogo. Um **pool** de provedores: Gemini (AI Studio), Groq, OpenRouter, Ollama local, qualquer URL compatível com OpenAI, ou Claude. Cada um tem limite por minuto e por dia (editável) | Pode ser 100% grátis |
 
 O jogo **reveza** entre as mentes com folga, coloca em espera a que devolver 429, desliga a que recusar a chave e, se nenhuma puder responder, usa o instinto. Modo **híbrido**: decisões importantes (decreto, sussurro, recém-chegado, solidão, rei) sempre consultam a IA; as comuns, só a fração que você definir (padrão 25%). Isso mantém o consumo dentro de planos grátis.
 
@@ -68,7 +85,10 @@ Controles: arrastar = câmera · roda/pinça = zoom · botão direito = mandar o
 src/world.js     terreno, trilhas, marcos, recursos, estruturas
 src/sim.js       motor: tempo, estações, planejador de obras, ofícios, ações, votação, poderes, save/load
 src/brain.js     instinto (utilidade), prompt do LLM, parser
-src/agent.js     fichas D&D (classes, raças, atributos, nível), personalidade
+src/agent.js     fichas D&D (classes, raças, atributos, nível), idade, família
+src/life.js      vida real: romance, casamento, filhos, traição, velhice, golpes
+src/mind.js      consciência: humor, objetivos livres, memória, reflexão e mestre (prompts)
+src/freewill.js  atos livres: mestre de regras, d20 e efeitos validados
 src/path.js      busca de caminho (BFS)
 src/llm.js       pool de mentes: provedores, limites, rodízio, modo híbrido
 src/sprites.js   sprites em pixel art gerados por código

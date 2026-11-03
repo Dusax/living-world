@@ -1,8 +1,16 @@
 import { pick } from './rng.js';
 
-export const NAMES = ['Davi', 'Eduardo', 'Isabelle', 'Kevin', 'Guga', 'Rafaelle', 'Jheni', 'Matheus', 'Devair', 'Jonatas', 'Nunes', 'Pires', 'Rudolf', 'Mira', 'Teo', 'Lúcio', 'Aurora', 'Bento', 'Cora', 'Elisa', 'Fausto', 'Gaia', 'Hugo', 'Iara', 'Jonas', 'Kira', 'Léo', 'Nina', 'Otto', 'Pia', 'Rúbia', 'Saulo', 'Tânia', 'Ulisses', 'Vera', 'Zeca', 'Ana', 'Bruno', 'Carla', 'Diego', 'Estela', 'Fabio', 'Gisele', 'Heitor', 'Ivo', 'Julia', 'Lara', 'Murilo', 'Noemi', 'Olavo', 'Paula', 'Quirino', 'Renata', 'Sofia', 'Tiago', 'Ursula', 'Valter', 'Wanda', 'Xavier', 'Yara', 'Zilda', 'Caio', 'Dora', 'Enzo', 'Flora', 'Gael', 'Helena', 'Igor', 'Joana', 'Lívia', 'Marcos', 'Nair', 'Orlando', 'Priscila', 'Ramiro', 'Selma', 'Tomás', 'Vitor', 'Alice', 'Breno', 'Clara', 'Daniel', 'Emília', 'Felipe', 'Gabriela', 'Henrique', 'Inês', 'João', 'Karina', 'Lucas', 'Maria', 'Nelson', 'Otávio', 'Patrícia', 'Rodrigo', 'Silvia', 'Thiago', 'Vinícius'];
+export const NAMES_F = ['Isabelle', 'Rafaelle', 'Jheni', 'Mira', 'Aurora', 'Cora', 'Elisa', 'Gaia', 'Iara', 'Kira', 'Nina', 'Pia', 'Rúbia', 'Tânia', 'Vera', 'Ana', 'Carla', 'Estela', 'Gisele', 'Julia', 'Lara', 'Noemi', 'Paula', 'Renata', 'Sofia', 'Ursula', 'Wanda', 'Yara', 'Zilda', 'Dora', 'Flora', 'Helena', 'Joana', 'Lívia', 'Nair', 'Priscila', 'Selma', 'Alice', 'Clara', 'Emília', 'Gabriela', 'Inês', 'Karina', 'Maria', 'Patrícia', 'Silvia'];
+export const NAMES_M = ['Davi', 'Eduardo', 'Kevin', 'Guga', 'Matheus', 'Devair', 'Jonatas', 'Nunes', 'Pires', 'Rudolf', 'Teo', 'Lúcio', 'Bento', 'Fausto', 'Hugo', 'Jonas', 'Léo', 'Otto', 'Saulo', 'Ulisses', 'Zeca', 'Bruno', 'Diego', 'Fabio', 'Heitor', 'Ivo', 'Murilo', 'Olavo', 'Quirino', 'Tiago', 'Valter', 'Xavier', 'Caio', 'Enzo', 'Gael', 'Igor', 'Marcos', 'Orlando', 'Ramiro', 'Tomás', 'Vitor', 'Breno', 'Daniel', 'Felipe', 'Henrique', 'João', 'Lucas', 'Nelson', 'Otávio', 'Rodrigo', 'Thiago', 'Vinícius'];
+export const NAMES = [...NAMES_F, ...NAMES_M];
 
-export const ROLE_LABEL = { lenhador: 'lenhador', fazendeiro: 'fazendeiro', mineiro: 'mineiro', construtor: 'mestre de obras', ferreiro: 'ferreiro', guarda: 'guarda', explorador: 'explorador', rei: 'rei' };
+export const SURNAMES = ['Silva', 'Nunes', 'Pires', 'Costa', 'Souza', 'Lima', 'Rocha', 'Alves', 'Dias', 'Moura', 'Ramos', 'Barros', 'Teixeira', 'Faria', 'Campos', 'Freitas', 'Cardoso', 'Melo', 'Araújo', 'Ribeiro', 'Pinto', 'Cunha', 'Matos', 'Brandão', 'Duarte'];
+export const YEAR_DAYS = 3;   // 1 ano de vida = 3 dias de jogo (~72 s em 1×)
+export const ADULT_AGE = 16;
+export const stageOf = (age) => (age < 12 ? 'crianca' : age < 16 ? 'adolescente' : age < 60 ? 'adulto' : 'idoso');
+export const STAGE_LABEL = { crianca: 'Criança', adolescente: 'Adolescente', adulto: 'Adulto', idoso: 'Idoso' };
+
+export const ROLE_LABEL = { anciao: 'ancião', lenhador: 'lenhador', fazendeiro: 'fazendeiro', mineiro: 'mineiro', construtor: 'mestre de obras', ferreiro: 'ferreiro', guarda: 'guarda', explorador: 'explorador', rei: 'rei' };
 
 export const TRAIT_LABELS = {
   bravery: ['medroso', 'corajoso'], sociability: ['reservado', 'sociável'], diligence: ['preguiçoso', 'trabalhador'],
@@ -52,13 +60,15 @@ export function alignment(a) {
   return law === 'Neutro' && good === 'Neutro' ? 'Neutro' : `${law} ${good}`;
 }
 
-export function makeAgent(sim, name, x, y) {
+export function makeAgent(sim, name, x, y, opts = {}) {
   const r = sim.rng;
   const id = sim.nextAgentId++;
   const a = {
     id, name, x, y, px: x, py: y,
     hue: Math.floor((id * 137.5) % 360), skin: Math.floor(r() * 4), hair: Math.floor(r() * 5),
     role: null, cls: null, race: null, lvl: 1, xp: 0, stats: null, maxHp: 100,
+    age: opts.age ?? 18 + Math.floor(r() * 26), sex: opts.sex ?? (r() < 0.5 ? 'f' : 'm'), fam: opts.fam || pick(r, SURNAMES),
+    parents: opts.parents || [], kids: [], spouse: null, love: {}, affair: null, preg: null, marriedTick: 0, guardian: null,
     traits: { bravery: 0.1 + r() * 0.85, sociability: 0.1 + r() * 0.85, diligence: 0.1 + r() * 0.85, curiosity: 0.1 + r() * 0.85, kindness: 0.1 + r() * 0.85 },
     hp: 100, hunger: 20 + r() * 20, fatigue: r() * 20, loneliness: 20 + r() * 20,
     inv: { wood: 0, food: 2, stone: 0 },
@@ -66,8 +76,22 @@ export function makeAgent(sim, name, x, y) {
     act: null, pending: null, thought: '', say: '', sayUntil: 0, consulted: 0,
     mem: [], rel: {}, fails: {}, whisper: null, born: sim.tick, died: null,
   };
-  rollSheet({ rng: r, agents: sim.agents }, a);
+  const [m, f] = (opts.parents || []).map((pid) => sim.byId(pid));
+  if (m && f) inheritSheet(sim, a, m, f); else rollSheet({ rng: r, agents: sim.agents }, a);
   return a;
+}
+
+// Filho(a): atributos e personalidade são uma mistura dos pais, com variação; a vocação (classe) vem de um dos pais ou nasce nova.
+export function inheritSheet(sim, a, m, f) {
+  const r = sim.rng, clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  a.stats = {};
+  for (const k of ABILITIES) a.stats[k] = clamp(Math.round((m.stats[k] + f.stats[k]) / 2 + (r() * 5 - 2.5)), 3, 18);
+  a.race = r() < 0.5 ? m.race : f.race;
+  for (const k of Object.keys(a.traits)) a.traits[k] = clamp((m.traits[k] + f.traits[k]) / 2 + (r() - 0.5) * 0.4, 0.05, 1);
+  a.skin = r() < 0.5 ? m.skin : f.skin; a.hair = r() < 0.5 ? m.hair : f.hair;
+  const best = Object.entries(CLASSES).map(([id, c]) => [id, a.stats[c.main] + r() * 6]).sort((x, y) => y[1] - x[1])[0][0];
+  a.cls = r() < 0.5 ? (r() < 0.5 ? m.cls : f.cls) : best;
+  a.lvl = 1; a.xp = 0; a.maxHp = maxHpFor(a); a.hp = a.maxHp;
 }
 
 export function describeTraits(a) {
@@ -75,8 +99,9 @@ export function describeTraits(a) {
   return scored.slice(0, 2).map(([k, v]) => TRAIT_LABELS[k][v >= 0.5 ? 1 : 0]).join(' e ');
 }
 
-export function randomName(sim) {
+export function randomName(sim, sex) {
   const used = new Set(sim.agents.map((a) => a.name));
-  const free = NAMES.filter((n) => !used.has(n));
-  return free.length ? pick(sim.rng, free) : 'Morador' + sim.nextAgentId;
+  const pool = sex === 'f' ? NAMES_F : sex === 'm' ? NAMES_M : NAMES;
+  const free = pool.filter((n) => !used.has(n));
+  return free.length ? pick(sim.rng, free) : (sex === 'f' ? 'Moça' : 'Rapaz') + sim.nextAgentId;
 }

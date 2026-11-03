@@ -1,6 +1,7 @@
 // Pool de "mentes": vários provedores (grátis ou não), cada um com limite por minuto e por dia.
 // O jogo reveza entre os que têm folga; se nenhum puder responder, os moradores usam o instinto.
 import { SYSTEM_PROMPT, buildPrompt, parseDecision } from './brain.js';
+import { MIND_SYSTEM, buildMindPrompt, parseMind, DM_SYSTEM, buildDMPrompt, parseDM } from './mind.js';
 
 // Valores iniciais conservadores. Limites e nomes de modelo mudam: ajuste na tela conforme a página do provedor.
 export const PRESETS = {
@@ -24,7 +25,7 @@ export class LLM {
   constructor() {
     this.providers = [];
     this.enabled = false;
-    this.share = 25;            // % das decisões "comuns" que vão para a IA (as importantes sempre vão)
+    this.share = 15;            // % das decisões "comuns" que vão para a IA (as importantes sempre vão)
     this.maxInflight = 3;
     this.inflight = 0;
     this.onChange = null;
@@ -52,6 +53,7 @@ export class LLM {
   ready() { return this.enabled && this.inflight < this.maxInflight && !!this.pick(); }
   // Híbrido: decisões importantes sempre consultam a IA; as comuns, só uma fração.
   wants(sim, a) {
+    if (a.age < 6) return false;
     const dec = sim.decreeText && sim.tick < sim.decreeUntil && a.consulted !== sim.decreeUntil;
     const whisp = a.whisper && sim.tick < a.whisper.until && a.consulted !== a.whisper.until;
     if (dec) { a.consulted = sim.decreeUntil; return true; }
@@ -91,6 +93,10 @@ export class LLM {
       throw e;
     }
   }
+  // Reflexão: a própria pessoa decide como se sente, o que quer da vida e o que faz (parseMind valida).
+  async deliberate(sim, agent) { return parseMind(await this.complete(MIND_SYSTEM, buildMindPrompt(sim, agent), 520)); }
+  // Mestre de jogo: decide o desfecho (habilidade, CD, efeitos) de um ato livre.
+  async adjudicate(sim, agent, target, intent) { return parseDM(await this.complete(DM_SYSTEM, buildDMPrompt(sim, agent, target, intent), 650)); }
   async decide(sim, agent) { return parseDecision(await this.complete(SYSTEM_PROMPT, buildPrompt(sim, agent), 300)); }
   async narrate(sim, events) {
     const sys = 'Você é o cronista de uma vila numa floresta. Escreva em português, em 6 a 10 frases curtas e vívidas (uma por linha), a crônica a partir dos eventos. Não invente fatos que não estejam nos eventos.';

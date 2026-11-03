@@ -5,6 +5,8 @@ import { Sprites } from './sprites.js';
 import { Narrator } from './narrator.js';
 import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITIES, ABILITY_LABEL, XP_TABLE, MAX_LEVEL, mod, alignment } from './agent.js';
 import { TPD, W, H, DEFS } from './world.js';
+import { mindOf } from './mind.js';
+import { stageOf, STAGE_LABEL } from './agent.js';
 
 const $ = (s) => document.querySelector(s);
 const SAVE_KEY = 'living-world-save-v2', LLM_KEY = 'living-world-llm', TICK_MS = 200, CW = 720, CH = 1280;
@@ -31,9 +33,9 @@ function bind(s) {
 function newWorld(seed = Math.floor(Math.random() * 1e9)) {
   bind(new Sim(seed, { name: $('#worldName').value.trim() || 'Alvorada' }));
   introT = 4;
-  narrator.push('Cada seguidor vira um morador.', { prio: 3 });
   narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3, at: [sim.center.x, sim.center.y] });
-  narrator.push('Por enquanto, uma clareira e uma fogueira.', { prio: 3 });
+  narrator.push('Uma clareira, uma fogueira e dois moradores.', { prio: 3 });
+  narrator.push('O resto, eles vão decidir sozinhos.', { prio: 3 });
 }
 function load() {
   const raw = store.get(SAVE_KEY);
@@ -77,6 +79,7 @@ function onMapClick(t) {
     select(best ? best.id : null);
   } else if (tool === 'goto') orderGoto(tx, ty);
   else if (tool === 'meteor') sim.trigger('meteoro', tx, ty);
+  else if (tool === 'cupid') { const a = selectedAgent(); let best = null, bd = 1.3; for (const o of sim.living()) { const d = Math.hypot(o.x + 0.5 - t.x, o.y + 0.2 - t.y); if (d < bd && o !== a) { bd = d; best = o; } } if (a && best) sim.cupid(a, best); else sim.log('info', 'Cupido: selecione alguém e clique em outro morador.'); }
   else sim.placeTool(tool, tx, ty);
 }
 function orderGoto(x, y) { const a = selectedAgent(); if (a && sim.order(a, { type: 'goto', gx: x, gy: y })) renderCard(true); }
@@ -98,9 +101,21 @@ function renderCard(force) {
   const home = sim.world.structures.find((s) => s.id === a.home);
   const cls = CLASSES[a.cls], nextXp = a.lvl >= MAX_LEVEL ? XP_TABLE[MAX_LEVEL] : XP_TABLE[a.lvl + 1], prevXp = XP_TABLE[a.lvl];
   const xpPct = a.lvl >= MAX_LEVEL ? 100 : Math.round(((a.xp - prevXp) / Math.max(1, nextXp - prevXp)) * 100);
+  const mind = mindOf(a), sp = a.spouse ? sim.byId(a.spouse) : null, kids = (a.kids || []).map((id) => sim.byId(id)).filter(Boolean);
+  const grown = a.age >= 16, lover = a.affair ? sim.byId(a.affair.with) : null;
+  const loves = Object.entries(a.love || {}).filter(([id, v]) => v >= 30 && sim.byId(+id)?.alive).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([id, v]) => `${esc(sim.byId(+id).name)} ${Math.round(v)}`).join(', ');
+  const civil = sp ? `casado(a) com ${esc(sp.name)}` : a.age < 16 ? esc(STAGE_LABEL[stageOf(a.age)].toLowerCase()) : 'solteiro(a)';
+  const life = `
+    <div class="small" style="margin-top:4px">🧠 <b>${esc(mind.mood)}</b>${mind.goal ? ` · quer: <i>${esc(mind.goal.text)}</i>` : ''}</div>
+    ${mind.summary ? `<div class="small muted">${esc(mind.summary)}</div>` : ''}
+    <div class="small">👪 ${civil}${a.preg ? ' · grávida' : ''}${kids.length ? ' · filhos: ' + kids.map((k) => `${esc(k.name)} (${Math.floor(k.age)})`).join(', ') : ''}</div>
+    ${lover ? `<div class="small" style="color:#ff9f6b">🤫 Segredo: caso com ${esc(lover.name)}</div>` : ''}
+    ${loves ? `<div class="small muted">💘 ${loves}</div>` : ''}
+    ${mind.life.length ? `<div class="small muted">Momentos: ${mind.life.slice(-3).map((e) => `d${e.day} ${esc(e.text)}`).join(' · ')}</div>` : ''}`;
   const html = `
-    <h3 style="margin:2px 0">${esc(a.name)} ${a.alive ? '' : '† '}${a.role === 'rei' ? '👑 ' : ''}<span class="muted small">${esc(RACES[a.race].label)} ${esc(cls.label)} · nível ${a.lvl}</span></h3>
-    <div class="small muted">${esc(ROLE_LABEL[a.role] || 'morador')} · ${esc(alignment(a))} · ${esc(describeTraits(a))}</div>
+    <h3 style="margin:2px 0">${esc(a.name)} ${esc(a.fam)} ${a.alive ? '' : '† '}${a.role === 'rei' ? '👑 ' : ''}<span class="muted small">${a.sex === 'f' ? '♀' : '♂'} ${Math.floor(a.age)} anos · ${esc(RACES[a.race].label)} ${grown ? esc(cls.label) + ' · nível ' + a.lvl : esc(STAGE_LABEL[stageOf(a.age)]) + ' (vocação: ' + esc(cls.label) + ')'}</span></h3>
+    <div class="small muted">${esc(ROLE_LABEL[a.role] || (grown ? 'morador' : 'em formação'))} · ${esc(alignment(a))} · ${esc(describeTraits(a))}</div>
+    ${life}
     <div class="small muted" style="margin:2px 0">${esc(cls.desc)}</div>
     ${bar('XP', xpPct, false)}
     <div class="sheet">${ABILITIES.map((k) => `<div>${ABILITY_LABEL[k]}<b>${a.stats[k]}</b>${mod(a.stats[k]) >= 0 ? '+' : ''}${mod(a.stats[k])}</div>`).join('')}</div>
@@ -116,7 +131,7 @@ function renderCard(force) {
 function renderPeople() {
   $('#people').innerHTML = sim.living().map((a) => {
     const act = a.pending ? 'pensando…' : a.sleeping ? 'dormindo' : a.act ? describeAct(sim, a.act) : '—';
-    return `<button class="person${a.id === selected ? ' sel' : ''}" data-id="${a.id}"><span class="dot" style="background:hsl(${a.hue} 55% 48%)"></span>${esc(a.name)}${a.role === 'rei' ? ' 👑' : ''}<small>${esc(CLASSES[a.cls].label)} ${a.lvl} · ${esc(ROLE_LABEL[a.role] || '')} · ${esc(act)}</small></button>`;
+    return `<button class="person${a.id === selected ? ' sel' : ''}" data-id="${a.id}"><span class="dot" style="background:hsl(${a.hue} 55% 48%)"></span>${esc(a.name)}${a.role === 'rei' ? ' 👑' : ''}<small>${Math.floor(a.age)}a · ${a.age >= 16 ? esc(CLASSES[a.cls].label) + ' ' + a.lvl : esc(STAGE_LABEL[stageOf(a.age)])} · ${esc(act)}</small></button>`;
   }).join('') || '<div class="muted">Ninguém restou.</div>';
 }
 $('#people').addEventListener('click', (e) => { const b = e.target.closest('[data-id]'); if (b) { select(+b.dataset.id); follow = true; } });
@@ -125,7 +140,7 @@ function renderTown() {
   const s = sim.stock, pop = sim.living().length, st = {};
   for (const x of sim.world.structures) st[x.type] = (st[x.type] || 0) + 1;
   const p = sim.nextProject();
-  $('#town').innerHTML = `<div class="small">🏘 <b>${esc(sim.name)}</b> · ${TIERS[sim.tier()]} · 👥 <b>${pop}</b> seguidores · † ${sim.stats.died}${sim.king ? ' · 👑 ' + esc(sim.byId(sim.king)?.name || '') : ''}</div>
+  $('#town').innerHTML = `<div class="small">🏘 <b>${esc(sim.name)}</b> · ${TIERS[sim.tier()]} · 👥 <b>${pop}</b> moradores · † ${sim.stats.died}${sim.king ? ' · 👑 ' + esc(sim.byId(sim.king)?.name || '') : ''}</div>
     <div class="small">Armazém: 🍖 <b>${s.food}</b> · 🪵 <b>${s.wood}</b> · 🪨 <b>${s.stone}</b> · 🔨 <b>${s.tools}</b></div>
     <div class="small muted">🏠 ${st.cabin || 0} cabanas · 🌾 ${st.field || 0} campos · ${st.tower || 0} torres · ${st.wall || 0} estacas${st.castle ? ' · 🏰' : ''}</div>
     <div class="small muted">Próxima obra: ${p ? esc(buildingName(p.type)) : sim.needSpace ? 'abrindo espaço na floresta…' : 'juntando material…'}</div>`;
@@ -176,7 +191,7 @@ document.querySelectorAll('[data-event]').forEach((b) => (b.onclick = () => sim.
 document.querySelectorAll('[data-tool]').forEach((b) => (b.onclick = () => {
   tool = b.dataset.tool;
   document.querySelectorAll('[data-tool]').forEach((x) => x.classList.toggle('on', x === b));
-  const hints = { select: '', goto: 'Clique no mapa: o habitante selecionado vai até lá (ou botão direito).', tree: 'Clique para plantar uma árvore.', bush: 'Clique para criar um arbusto de frutas.', stone: 'Clique para criar uma pedra.', house: 'Clique para criar uma cabana pronta.', meteor: 'Clique para derrubar um meteoro.' };
+  const hints = { select: '', goto: 'Clique no mapa: o habitante selecionado vai até lá (ou botão direito).', tree: 'Clique para plantar uma árvore.', bush: 'Clique para criar um arbusto de frutas.', stone: 'Clique para criar uma pedra.', house: 'Clique para criar uma cabana pronta.', meteor: 'Clique para derrubar um meteoro.', cupid: 'Selecione alguém e clique em outro morador: eles se apaixonam.' };
   $('#toolhint').hidden = !hints[tool]; $('#toolhint').textContent = hints[tool];
 }));
 
@@ -185,7 +200,7 @@ $('#worldName').onchange = (e) => { sim.name = e.target.value.trim() || 'Alvorad
 $('#autoNarr').onchange = (e) => { narrator.enabled = e.target.checked; if (!narrator.enabled) narrator.clear(); };
 $('#autoCam').onchange = (e) => { autoCam = e.target.checked; };
 $('#showPoll').onchange = (e) => { showPoll = e.target.checked; };
-$('#introBtn').onclick = () => { introT = 4; narrator.push('Cada seguidor vira um morador.', { prio: 3 }); narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); };
+$('#introBtn').onclick = () => { introT = 4; narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); };
 $('#scriptBtn').onclick = async () => {
   const evs = sim.logs.filter((l) => l.t > sim.tick - TPD * 2 && l.kind !== 'info' && l.kind !== 'talk').map((l) => `[dia ${l.day}, ${String(l.hour).padStart(2, '0')}h] ${l.text}`);
   const box = $('#narr'); box.hidden = false;

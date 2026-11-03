@@ -106,13 +106,15 @@ export function draw(ctx, canvas, sim, view, ui) {
     push(Math.round(ay), () => {
       const moving = a.px !== a.x || a.py !== a.y;
       const img = sp.person(a, moving ? (Math.floor(now * 7) & 1) : 0, a.role === 'rei' ? 1 : 0);
-      const cx = X(ax) + 3 * z, by = Y(ay + 1) - 16 * z - 1 * z;
-      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(X(ax) + 3 * z, Y(ay + 1) - 3 * z, 10 * z, 2 * z);
-      if (a.sleeping) { ctx.globalAlpha = 0.75; ctx.save(); ctx.translate(cx + 5 * z, by + 12 * z); ctx.rotate(Math.PI / 2); ctx.drawImage(img, -5 * z, -8 * z, 10 * z, 16 * z); ctx.restore(); ctx.globalAlpha = 1; textPx(ctx, 'z', X(ax) + 11 * z, by + 2 * z, Math.max(10, 6 * z), '#cfe3ff'); }
-      else ctx.drawImage(img, cx, by, 10 * z, 16 * z);
+      const sc = a.age < 4 ? 0.5 : a.age < 8 ? 0.62 : a.age < 12 ? 0.74 : a.age < 16 ? 0.88 : 1;   // crianças são menores
+      const pw = 10 * z * sc, ph = 16 * z * sc;
+      const cx = X(ax) + 8 * z - pw / 2, by = Y(ay + 1) - ph - 1 * z;
+      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(cx, Y(ay + 1) - 3 * z, pw, 2 * z);
+      if (a.sleeping) { ctx.globalAlpha = 0.75; ctx.save(); ctx.translate(cx + pw / 2, by + ph * 0.75); ctx.rotate(Math.PI / 2); ctx.drawImage(img, -pw / 2, -ph / 2, pw, ph); ctx.restore(); ctx.globalAlpha = 1; textPx(ctx, 'z', X(ax) + 11 * z, by + 2 * z, Math.max(10, 6 * z), '#cfe3ff'); }
+      else ctx.drawImage(img, cx, by, pw, ph);
       const torch = dark > 0.25 && (a.role === 'guarda' || (a.act && (a.act.type === 'expedition' || a.act.type === 'patrol')));
       if (torch) { ctx.drawImage(sp.misc.flame[Math.floor(now * 8 + a.id) % 2], cx + 8 * z, by + 2 * z, 7 * z, 8 * z); lights.push([ax + 0.9, ay + 0.2, 2.4]); }
-      if (a.hp < 100 && !a.sleeping) { ctx.fillStyle = '#400'; ctx.fillRect(cx, by - 4 * z, 10 * z, 2 * z); ctx.fillStyle = '#e44'; ctx.fillRect(cx, by - 4 * z, 10 * z * Math.max(0, a.hp) / 100, 2 * z); }
+      if (a.hp < a.maxHp && !a.sleeping) { ctx.fillStyle = '#400'; ctx.fillRect(cx, by - 4 * z, pw, 2 * z); ctx.fillStyle = '#e44'; ctx.fillRect(cx, by - 4 * z, pw * Math.max(0, a.hp) / a.maxHp, 2 * z); }
       if (a.pending) textPx(ctx, '…', cx + 2 * z, by - 2 * z, Math.max(12, 8 * z), '#fff');
       if (sel === a.id || hl === a.id || z >= 2.6) label(ctx, a.name, X(ax) + 8 * z, by - (a.hp < 100 ? 6 : 2) * z, Math.max(11, 5.2 * z), sel === a.id || hl === a.id);
     });
@@ -155,7 +157,7 @@ export function draw(ctx, canvas, sim, view, ui) {
 // HUD, introdução e legendas (desenhados no canvas para entrar na gravação).
 function overlay(ctx, cw, ch, sim, ui) {
   if (ui.hud !== false) {
-    const txt = `${sim.living().length} seguidores · dia ${sim.day()} · ${sim.tierName()}`;
+    const txt = `${sim.name} · ${sim.living().length} moradores · dia ${sim.day()} · ${sim.tierName()}`;
     ctx.font = `20px ${FONT}`; const tw = ctx.measureText(txt).width;
     ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cw / 2 - tw / 2 - 12, 18, tw + 24, 34);
     textPx(ctx, txt, cw / 2, 43, 20, '#f2e6b8', 'center');
@@ -163,9 +165,9 @@ function overlay(ctx, cw, ch, sim, ui) {
   if (ui.intro > 0) {
     const a = Math.min(1, ui.intro * 2);
     ctx.globalAlpha = a; ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, cw, ch);
-    textPx(ctx, 'ESSA PÁGINA TEM', cw / 2, ch * 0.13, 34, '#9aa38c', 'center');
+    textPx(ctx, sim.name.toUpperCase(), cw / 2, ch * 0.13, 34, '#9aa38c', 'center');
     textPx(ctx, String(sim.living().length), cw / 2, ch * 0.13 + 100, 110, '#f7e19c', 'center');
-    textPx(ctx, 'SEGUIDORES', cw / 2, ch * 0.13 + 150, 34, '#9aa38c', 'center');
+    textPx(ctx, 'MORADORES', cw / 2, ch * 0.13 + 150, 34, '#9aa38c', 'center');
     ctx.globalAlpha = 1;
   }
   if (ui.poll) {
