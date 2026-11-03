@@ -1,7 +1,7 @@
-name: Publicar no GitHub Pages
+name: Publicar Mundo Vivo no GitHub Pages
 on:
   push:
-    branches: [main]
+    branches: [main, claude/affectionate-darwin-hqpp0w]   # a branch padrão atual deste repo; "main" vale se você renomear
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,12 +18,20 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Montar site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Testes da simulação
+        run: node --test living-world/test/*.test.js
+      - name: Montar o site (só os arquivos do jogo)
         run: |
-          mkdir site
-          cp index.html privacy.html manifest.webmanifest sw.js icon-192.png icon-512.png site/
+          mkdir _site
+          cp living-world/index.html living-world/style.css _site/
+          cp -r living-world/src _site/src
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
       - id: deploy
         uses: actions/deploy-pages@v4

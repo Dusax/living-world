@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mundo Vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <h1>🏕 Mundo Vivo</h1>
+  <div id="clock">…</div>
+  <div id="speed">
+    <button id="btnPause" title="Espaço">⏸</button>
+    <button data-speed="1" class="on">1×</button>
+    <button data-speed="2">2×</button>
+    <button data-speed="4">4×</button>
+    <button data-speed="8">8×</button>
+  </div>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="toolhint" hidden></div>
+  </div>
+  <aside id="side">
+    <details open>
+      <summary>Povoado</summary>
+      <div id="town"></div>
+      <div id="people"></div>
+    </details>
+
+    <details open>
+      <summary>Seguidores (novos moradores)</summary>
+      <div class="small muted">Cada seguidor vira um morador. Cole os @ reais de quem te segue.</div>
+      <div class="row"><input id="oneName" placeholder="@nome de um seguidor" maxlength="16"><button id="addOne">➕</button></div>
+      <textarea id="nameList" rows="3" placeholder="Vários nomes: um por linha (ou separados por vírgula)"></textarea>
+      <div class="btns"><button id="addCaravan">🚶 Chegar em caravana</button><button data-rand="1">+1 aleatório</button><button data-rand="5">+5</button><button data-rand="12">+12</button></div>
+    </details>
+
+    <details open id="cardBox">
+      <summary>Habitante</summary>
+      <div id="cardBody" class="muted">Clique em alguém no mapa (ou na lista) para ver a mente dessa pessoa.</div>
+      <div id="cardCtl" hidden>
+        <div class="row"><input id="whisperIn" placeholder="Sussurrar uma ideia só para ela…" maxlength="140"><button id="whisperBtn">Sussurrar</button></div>
+        <div class="row">
+          <select id="orderSel">
+            <option value="gather:food">Colher frutas</option><option value="farm">Cuidar do campo</option><option value="gather:wood">Cortar madeira</option>
+            <option value="gather:stone">Pegar pedra</option><option value="build">Construir</option><option value="smith">Forjar</option><option value="patrol">Fazer a ronda</option>
+            <option value="expedition">Expedição</option><option value="eat">Comer</option><option value="sleep">Dormir</option><option value="store">Guardar no armazém</option><option value="wander">Explorar</option>
+          </select>
+          <button id="orderBtn">Ordenar</button>
+        </div>
+        <div class="row"><button id="followBtn">🎥 Seguir</button><button id="blessBtn">✨ Abençoar</button><button id="smiteBtn" class="danger">⚡ Raio</button></div>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Votação (stories)</summary>
+      <div class="btns"><button data-poll="king">👑 Eleger rei</button><button data-poll="build">🏗 Próxima obra</button><button data-poll="expedition">🧭 Expedição</button></div>
+      <div id="pollBox"></div>
+      <label class="row small"><input type="checkbox" id="showPoll" checked> Mostrar a votação no vídeo</label>
+    </details>
+
+    <details open>
+      <summary>Poderes divinos</summary>
+      <div class="row"><input id="decreeIn" placeholder="Decreto para TODOS (ex.: construam casas)" maxlength="140"><button id="decreeBtn">Decretar</button></div>
+      <div class="btns" id="events">
+        <button data-event="chuva">🌧 Chuva</button><button data-event="seca">☀ Seca</button><button data-event="colheita">🌾 Colheita</button><button data-event="dadiva">🎁 Dádiva</button>
+        <button data-event="praga" class="danger">☣ Praga</button><button data-event="meteoro" class="danger">☄ Meteoro</button>
+      </div>
+      <div class="muted small">Ferramentas (clique no mapa):</div>
+      <div class="btns" id="tools">
+        <button data-tool="select" class="on">👆 Selecionar</button><button data-tool="goto">📍 Mandar ir</button><button data-tool="tree">🌳 Árvore</button>
+        <button data-tool="bush">🍓 Arbusto</button><button data-tool="stone">🪨 Pedra</button><button data-tool="house">🏠 Cabana</button><button data-tool="meteor" class="danger">☄ Meteoro aqui</button>
+      </div>
+    </details>
+
+    <details>
+      <summary>Vídeo e narração</summary>
+      <div class="row"><input id="worldName" placeholder="Nome do mundo" maxlength="20" value="Alvorada"></div>
+      <label class="row small"><input type="checkbox" id="autoNarr" checked> Narração automática (legendas)</label>
+      <label class="row small"><input type="checkbox" id="autoCam" checked> Câmera automática (segue a história)</label>
+      <div class="btns"><button id="introBtn">🎬 Intro</button><button id="scriptBtn">📜 Roteiro dos últimos dias</button><button id="recBtn">⏺ Gravar clipe</button></div>
+      <div id="narr" class="narr" hidden></div>
+    </details>
+
+    <details>
+      <summary>Crônica</summary>
+      <div id="log"></div>
+    </details>
+
+    <details>
+      <summary>Mentes (IA) e jogo</summary>
+      <p class="small muted">Sem nenhuma mente, os moradores decidem por <b>instinto</b>. Com mentes, as decisões importantes e uma fração das comuns vão para a IA. Você pode ligar <b>várias gratuitas</b>: o jogo reveza e respeita o limite de cada uma. As chaves ficam só neste navegador.</p>
+      <label class="row"><input type="checkbox" id="llmOn"> Usar IA como mente</label>
+      <div class="row small"><span>Decisões comuns pela IA:</span><input type="range" id="llmShare" min="0" max="100" step="5" value="25" style="flex:1"><b id="llmShareV">25%</b></div>
+      <div id="minds"></div>
+      <div class="row"><select id="mindPreset"></select><button id="mindAdd">➕ Adicionar</button></div>
+      <div id="llmStats" class="small muted"></div>
+      <div class="btns"><button id="saveBtn">💾 Salvar</button><button id="loadBtn">📂 Carregar</button><button id="exportBtn">⬇ Exportar crônica</button><button id="newBtn" class="danger">🌍 Novo mundo</button></div>
+    </details>
+  </aside>
+</main>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

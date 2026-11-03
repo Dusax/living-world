@@ -1,7 +1,0 @@
-{
-  "appId": "com.dusax.grandstay",
-  "appName": "Grand Stay",
-  "webDir": "www",
-  "backgroundColor": "#1b2340",
-  "android": { "allowMixedContent": false }
-}

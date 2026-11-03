@@ -1,0 +1,11 @@
+{
+  "name": "living-world",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mundo simulado onde habitantes decidem sozinhos (instinto ou Claude) e você é o deus.",
+  "scripts": {
+    "start": "node serve.mjs",
+    "test": "node --test test/*.test.js"
+  }
+}
