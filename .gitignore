@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+# chaves nunca em texto puro
+minds.json
+*.keys.json
+.env
+.env.*

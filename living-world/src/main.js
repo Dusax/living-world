@@ -3,6 +3,7 @@ import { LLM, PRESETS, newProvider } from './llm.js';
 import { draw, screenToTile, TS } from './render.js';
 import { Sprites } from './sprites.js';
 import { Narrator } from './narrator.js';
+import { encryptJSON, decryptJSON, packMinds } from './vault.js';
 import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITIES, ABILITY_LABEL, XP_TABLE, MAX_LEVEL, mod, alignment } from './agent.js';
 import { TPD, W, H, DEFS } from './world.js';
 import { mindOf } from './mind.js';
@@ -227,7 +228,10 @@ $('#recBtn').onclick = () => {
 // Mentes (IA): vários provedores, cada um com limites próprios
 const MINDS_KEY = 'living-world-minds';
 try { llm.load(JSON.parse(store.get(MINDS_KEY) || 'null')); } catch { /* ignore */ }
-const saveMinds = () => store.set(MINDS_KEY, JSON.stringify(llm.toJSON()));
+const remember = () => store.get('living-world-remember') === '1';
+// Por padrão as chaves NÃO ficam gravadas no navegador: só a configuração. As chaves vêm do cofre criptografado do GitHub.
+const saveMinds = () => { const o = llm.toJSON(); if (!remember()) o.providers = o.providers.map((p) => ({ ...p, key: '' })); store.set(MINDS_KEY, JSON.stringify(o)); };
+saveMinds();   // limpa chaves que versões antigas tenham gravado
 $('#mindPreset').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('');
 function renderMinds() {
   $('#minds').innerHTML = llm.providers.map((p, i) => `<div class="mind" data-i="${i}">
@@ -255,6 +259,42 @@ function renderLLM() {
 }
 llm.onChange = renderLLM;
 renderMinds();
+
+// Cofre: arquivo criptografado no GitHub (minds.enc.json). Só a sua senha abre.
+const vs = (t, bad) => { const el = $('#vaultStatus'); el.textContent = t; el.style.color = bad ? 'var(--bad)' : ''; };
+$('#vaultExport').onclick = async () => {
+  try {
+    const payload = packMinds(llm);
+    if (!payload.providers.length) return vs('Cadastre pelo menos uma mente com chave antes de exportar.', true);
+    vs('Criptografando…');
+    const text = JSON.stringify(await encryptJSON(payload, $('#vaultPass').value));
+    $('#vaultText').value = text;
+    try { await navigator.clipboard.writeText(text); vs('Pronto e copiado. No GitHub: Add file → Create new file → nome living-world/minds.enc.json → cole → Commit.'); }
+    catch { vs('Pronto. Copie o texto acima e salve no GitHub como living-world/minds.enc.json.'); }
+  } catch (e) { vs(e.message, true); }
+};
+$('#vaultLoad').onclick = async () => {
+  try {
+    let blob; const pasted = $('#vaultText').value.trim();
+    if (pasted) blob = JSON.parse(pasted);
+    else {
+      vs('Buscando o arquivo no GitHub…');
+      const r = await fetch('minds.enc.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error('Não achei minds.enc.json neste site. Exporte, salve no GitHub e espere o deploy.');
+      blob = await r.json();
+    }
+    vs('Abrindo…');
+    const data = await decryptJSON(blob, $('#vaultPass').value);
+    llm.providers = data.providers.map((p) => ({ ...newProvider(p.preset || 'custom'), ...p }));
+    llm.share = data.share ?? llm.share; llm.enabled = true;
+    $('#llmOn').checked = true; $('#llmShare').value = llm.share; $('#llmShareV').textContent = llm.share + '%';
+    saveMinds(); renderMinds(); renderLLM(); $('#vaultPass').value = '';
+    vs(`${llm.providers.length} mente(s) carregada(s). As chaves ficam só na memória desta aba.`);
+  } catch (e) { vs(e.message, true); }
+};
+$('#vaultRemember').checked = remember();
+$('#vaultRemember').onchange = (e) => { store.set('living-world-remember', e.target.checked ? '1' : '0'); saveMinds(); };
+fetch('minds.enc.json', { method: 'HEAD', cache: 'no-store' }).then((r) => { if (r.ok) vs('Há mentes salvas no GitHub: digite a senha do cofre e clique em Carregar.'); }).catch(() => {});
 
 $('#saveBtn').onclick = () => { $('#saveBtn').textContent = save() ? '✅ Salvo' : '❌ Falhou'; setTimeout(() => ($('#saveBtn').textContent = '💾 Salvar'), 1500); };
 $('#loadBtn').onclick = () => { if (!load()) sim.log('info', 'Nenhum jogo salvo ainda.'); };

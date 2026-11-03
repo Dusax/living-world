@@ -28,6 +28,7 @@ jobs:
           mkdir _site
           cp living-world/index.html living-world/style.css _site/
           cp -r living-world/src _site/src
+          cp living-world/minds.enc.json _site/ 2>/dev/null || true   # cofre criptografado das mentes (opcional)
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

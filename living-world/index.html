@@ -95,11 +95,20 @@
 
     <details>
       <summary>Mentes (IA) e jogo</summary>
-      <p class="small muted">Sem nenhuma mente, os moradores decidem por <b>instinto</b>. Com mentes, as decisões importantes e uma fração das comuns vão para a IA. Você pode ligar <b>várias gratuitas</b>: o jogo reveza e respeita o limite de cada uma. As chaves ficam só neste navegador.</p>
+      <p class="small muted">Sem nenhuma mente, os moradores decidem por <b>instinto</b>. Com mentes, as decisões importantes e uma fração das comuns vão para a IA. Você pode ligar <b>várias gratuitas</b>: o jogo reveza e respeita o limite de cada uma.</p>
       <label class="row"><input type="checkbox" id="llmOn"> Usar IA como mente</label>
       <div class="row small"><span>Decisões comuns pela IA:</span><input type="range" id="llmShare" min="0" max="100" step="5" value="25" style="flex:1"><b id="llmShareV">25%</b></div>
       <div id="minds"></div>
       <div class="row"><select id="mindPreset"></select><button id="mindAdd">➕ Adicionar</button></div>
+      <div class="mind" id="vault">
+        <div class="small"><b>Guardar no GitHub (criptografado)</b></div>
+        <div class="small muted">As chaves não ficam gravadas no navegador. Exporte um arquivo criptografado, salve no repositório e, em qualquer navegador, carregue com a senha. Use uma frase longa e que só você saiba: o repositório é público.</div>
+        <div class="row"><input id="vaultPass" type="password" placeholder="senha do cofre (frase longa)" autocomplete="off"></div>
+        <div class="btns"><button id="vaultExport">🔐 Exportar mentes</button><button id="vaultLoad">🔓 Carregar do GitHub</button></div>
+        <textarea id="vaultText" rows="3" placeholder="Texto criptografado: o botão Exportar preenche aqui. Para carregar sem o site, cole aqui."></textarea>
+        <label class="row small"><input type="checkbox" id="vaultRemember"> Lembrar as chaves neste navegador (não recomendado)</label>
+        <div id="vaultStatus" class="small muted"></div>
+      </div>
       <div id="llmStats" class="small muted"></div>
       <div class="btns"><button id="saveBtn">💾 Salvar</button><button id="loadBtn">📂 Carregar</button><button id="exportBtn">⬇ Exportar crônica</button><button id="newBtn" class="danger">🌍 Novo mundo</button></div>
     </details>

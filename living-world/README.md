@@ -64,7 +64,17 @@ Cada morador tem **humor**, **memória de longo prazo** (momentos marcantes e um
 
 O jogo **reveza** entre as mentes com folga, coloca em espera a que devolver 429, desliga a que recusar a chave e, se nenhuma puder responder, usa o instinto. Modo **híbrido**: decisões importantes (decreto, sussurro, recém-chegado, solidão, rei) sempre consultam a IA; as comuns, só a fração que você definir (padrão 25%). Isso mantém o consumo dentro de planos grátis.
 
-Configure em **Mentes (IA) e jogo**: escolha o provedor, cole a chave, ajuste modelo e limites. Chaves ficam só no `localStorage` do navegador. Os limites e nomes de modelo iniciais são conservadores e **podem estar desatualizados**: confira a página do provedor. Para a IA funcionar, abra o jogo localmente (`npm start`) ou numa hospedagem sua; o link publicado como artefato do Claude bloqueia conexões externas.
+Configure em **Mentes (IA) e jogo**: escolha o provedor, cole a chave, ajuste modelo e limites. Os limites e nomes de modelo iniciais são conservadores e **podem estar desatualizados**: confira a página do provedor. Para a IA funcionar, abra o jogo localmente (`npm start`) ou pelo GitHub Pages; o link publicado como artefato do Claude bloqueia conexões externas.
+
+### Guardar as chaves no GitHub (sem expor)
+
+**Nunca coloque chave em texto no repositório** (ele é público; robôs acham chaves em minutos). O jogo não grava chaves no navegador. Em vez disso há um **cofre criptografado** (AES-256-GCM, chave derivada da sua senha por PBKDF2 com 600 mil iterações):
+
+1. Cadastre as mentes e digite uma **senha longa** no cofre. Clique em **🔐 Exportar mentes**.
+2. No GitHub: *Add file → Create new file*, nome `living-world/minds.enc.json`, cole o texto e faça o commit.
+3. Depois do deploy do Pages, em qualquer navegador: digite a senha e clique em **🔓 Carregar do GitHub**. As chaves ficam só na memória daquela aba.
+
+Quem ler o arquivo só consegue abri-lo adivinhando a senha, então ela é a sua proteção: quanto mais longa, melhor. Use isso só com chaves gratuitas e revogáveis; **não guarde chave paga assim**.
 
 ## Vídeo e narração
 
