@@ -31,9 +31,9 @@ function bind(s) {
 function newWorld(seed = Math.floor(Math.random() * 1e9)) {
   bind(new Sim(seed, { name: $('#worldName').value.trim() || 'Alvorada' }));
   introT = 4;
-  narrator.push('Cada seguidor vira um morador.', { prio: 3 });
   narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3, at: [sim.center.x, sim.center.y] });
-  narrator.push('Por enquanto, uma clareira e uma fogueira.', { prio: 3 });
+  narrator.push('Uma clareira, uma fogueira e dois moradores.', { prio: 3 });
+  narrator.push('O resto, eles vão decidir sozinhos.', { prio: 3 });
 }
 function load() {
   const raw = store.get(SAVE_KEY);
@@ -125,7 +125,7 @@ function renderTown() {
   const s = sim.stock, pop = sim.living().length, st = {};
   for (const x of sim.world.structures) st[x.type] = (st[x.type] || 0) + 1;
   const p = sim.nextProject();
-  $('#town').innerHTML = `<div class="small">🏘 <b>${esc(sim.name)}</b> · ${TIERS[sim.tier()]} · 👥 <b>${pop}</b> seguidores · † ${sim.stats.died}${sim.king ? ' · 👑 ' + esc(sim.byId(sim.king)?.name || '') : ''}</div>
+  $('#town').innerHTML = `<div class="small">🏘 <b>${esc(sim.name)}</b> · ${TIERS[sim.tier()]} · 👥 <b>${pop}</b> moradores · † ${sim.stats.died}${sim.king ? ' · 👑 ' + esc(sim.byId(sim.king)?.name || '') : ''}</div>
     <div class="small">Armazém: 🍖 <b>${s.food}</b> · 🪵 <b>${s.wood}</b> · 🪨 <b>${s.stone}</b> · 🔨 <b>${s.tools}</b></div>
     <div class="small muted">🏠 ${st.cabin || 0} cabanas · 🌾 ${st.field || 0} campos · ${st.tower || 0} torres · ${st.wall || 0} estacas${st.castle ? ' · 🏰' : ''}</div>
     <div class="small muted">Próxima obra: ${p ? esc(buildingName(p.type)) : sim.needSpace ? 'abrindo espaço na floresta…' : 'juntando material…'}</div>`;
@@ -185,7 +185,7 @@ $('#worldName').onchange = (e) => { sim.name = e.target.value.trim() || 'Alvorad
 $('#autoNarr').onchange = (e) => { narrator.enabled = e.target.checked; if (!narrator.enabled) narrator.clear(); };
 $('#autoCam').onchange = (e) => { autoCam = e.target.checked; };
 $('#showPoll').onchange = (e) => { showPoll = e.target.checked; };
-$('#introBtn').onclick = () => { introT = 4; narrator.push('Cada seguidor vira um morador.', { prio: 3 }); narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); };
+$('#introBtn').onclick = () => { introT = 4; narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); narrator.push(`Esse é o mundo de ${sim.name}.`, { prio: 3 }); };
 $('#scriptBtn').onclick = async () => {
   const evs = sim.logs.filter((l) => l.t > sim.tick - TPD * 2 && l.kind !== 'info' && l.kind !== 'talk').map((l) => `[dia ${l.day}, ${String(l.hour).padStart(2, '0')}h] ${l.text}`);
   const box = $('#narr'); box.hidden = false;

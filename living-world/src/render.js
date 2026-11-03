@@ -155,7 +155,7 @@ export function draw(ctx, canvas, sim, view, ui) {
 // HUD, introdução e legendas (desenhados no canvas para entrar na gravação).
 function overlay(ctx, cw, ch, sim, ui) {
   if (ui.hud !== false) {
-    const txt = `${sim.living().length} seguidores · dia ${sim.day()} · ${sim.tierName()}`;
+    const txt = `${sim.name} · ${sim.living().length} moradores · dia ${sim.day()} · ${sim.tierName()}`;
     ctx.font = `20px ${FONT}`; const tw = ctx.measureText(txt).width;
     ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(cw / 2 - tw / 2 - 12, 18, tw + 24, 34);
     textPx(ctx, txt, cw / 2, 43, 20, '#f2e6b8', 'center');
@@ -163,9 +163,9 @@ function overlay(ctx, cw, ch, sim, ui) {
   if (ui.intro > 0) {
     const a = Math.min(1, ui.intro * 2);
     ctx.globalAlpha = a; ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, cw, ch);
-    textPx(ctx, 'ESSA PÁGINA TEM', cw / 2, ch * 0.13, 34, '#9aa38c', 'center');
+    textPx(ctx, sim.name.toUpperCase(), cw / 2, ch * 0.13, 34, '#9aa38c', 'center');
     textPx(ctx, String(sim.living().length), cw / 2, ch * 0.13 + 100, 110, '#f7e19c', 'center');
-    textPx(ctx, 'SEGUIDORES', cw / 2, ch * 0.13 + 150, 34, '#9aa38c', 'center');
+    textPx(ctx, 'MORADORES', cw / 2, ch * 0.13 + 150, 34, '#9aa38c', 'center');
     ctx.globalAlpha = 1;
   }
   if (ui.poll) {

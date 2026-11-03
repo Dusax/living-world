@@ -15,7 +15,7 @@ test('mundo é determinístico por semente', () => {
 test('dois moradores sobrevivem e constroem', () => {
   const s = new Sim(11);
   run(s, 6);
-  assert.equal(s.living().length, 2, 'alguém morreu cedo demais');
+  assert.ok(s.agents.slice(0, 2).every((x) => x.alive), 'alguém dos dois iniciais morreu cedo demais');
   assert.ok(s.structs('field').length >= 1 || s.structs('cabin').length >= 1, 'nenhuma obra em 6 dias');
 });
 
@@ -88,4 +88,12 @@ test('o povo clama por um rei e escolhe sozinho se você não votar', () => {
   assert.ok(s.king, 'ninguém virou rei');
   assert.equal(s.byId(s.king).role, 'rei');
   assert.ok(s.logs.some((l) => /clama por um rei/.test(l.text)));
+});
+
+test('solo: a vila cresce sozinha, sem ninguém adicionar moradores', () => {
+  const s = new Sim(12);
+  run(s, 40);
+  assert.ok(s.living().length >= 10, `só ${s.living().length} moradores`);
+  assert.ok(s.stats.died <= 3, `${s.stats.died} mortes`);
+  assert.ok(s.structs('cabin').length >= 2);
 });

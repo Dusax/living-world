@@ -122,10 +122,10 @@ export class Sim {
       out.push(a);
     });
     const n = out.length;
-    this.log('event', n === 1 ? `🚶 ${out[0].name} chegou a ${this.name}.` : `🚶 Uma caravana de ${n} seguidores chegou a ${this.name}.`);
+    this.log('event', n === 1 ? `🚶 ${out[0].name} chegou a ${this.name}.` : `🚶 Uma caravana de ${n} viajantes chegou a ${this.name}.`);
     const cl = (a) => `${CLASSES[a.cls].label.toLowerCase()} ${RACES[a.race].label.toLowerCase()}`;
     if (n === 1) this.beat(`Chegou ${out[0].name}, ${cl(out[0])}. Mais um morador em ${this.name}.`, { prio: 2, agent: out[0].id });
-    else this.beat(n > 5 ? `Chegaram ${n} novos seguidores. E com eles, muitos outros moradores.` : `Chegaram ${n} novos seguidores. Como ${out[0].name}, ${CLASSES[out[0].cls].label.toLowerCase()}, e ${out[1].name}, ${CLASSES[out[1].cls].label.toLowerCase()}.`, { prio: 2, at: [this.center.x, this.center.y] });
+    else this.beat(n > 5 ? `Chegaram ${n} viajantes em ${this.name}. A vila está crescendo.` : `Chegaram ${n} viajantes. Como ${out[0].name}, ${CLASSES[out[0].cls].label.toLowerCase()}, e ${out[1].name}, ${CLASSES[out[1].cls].label.toLowerCase()}.`, { prio: 2, at: [this.center.x, this.center.y] });
     return out;
   }
 
@@ -214,7 +214,8 @@ export class Sim {
     const homeless = this.living().filter((a) => !a.home).length;
     const q = [];
     if (this.forced) q.push(this.forced);
-    if (homeless > 0 || !count('cabin')) q.push('cabin');
+    const beds = this.houses().reduce((sum, h) => sum + DEFS[h.type].cap, 0);
+    if (homeless > 0 || !count('cabin') || (pop >= 4 && pop < 60 && beds - pop < 2 && this.stock.food >= pop * 2)) q.push('cabin');
     if (pop >= 2 && count('field') < Math.ceil(pop / 3)) q.push('field');
     if (pop >= 4 && !count('well')) q.push('well');
     if (pop >= 6 && !count('barn')) q.push('barn');
@@ -382,6 +383,7 @@ export class Sim {
     if (this.day() % SEASON_DAYS === 1 && this.day() > 1) { this.log('event', `Chegou ${this.seasonName()}.`); this.beat(`Chegou ${this.seasonName().toLowerCase()} em ${this.name}.`, { prio: 0 }); }
     for (const a of this.living()) this.gainXp(a, 1);
     this.kingClamor();
+    this.immigration();
     this.rebalanceRoles();
     this.spreadForest();
     const pop = this.living().length;
@@ -401,6 +403,17 @@ export class Sim {
       }
       this.lastTier = tier;
     }
+  }
+  // Viajantes chegam sozinhos quando a vila tem comida e lugar para dormir: o mundo cresce sem você fazer nada.
+  immigration() {
+    const pop = this.living().length;
+    if (pop >= 60) return;
+    const beds = this.houses().reduce((sum, h) => sum + DEFS[h.type].cap, 0), room = beds - pop;
+    const fed = this.stock.food >= Math.max(8, pop * 2.5);
+    if ((room < 1 && pop >= 4) || !fed || this.day() < 2) return;
+    if (this.rng() > (pop < 6 ? 0.75 : pop < 20 ? 0.5 : 0.35)) return;
+    const n = Math.min(Math.max(1, room), 1 + (this.rng() < 0.4 ? 1 : 0) + (this.rng() < 0.15 ? 2 : 0));
+    this.addFollowers(Array(n).fill(null));
   }
   // O povo de uma cidade grande, depois de alguns dias, pede um rei. Sem resposta sua, o próprio povo vota.
   kingClamor() {

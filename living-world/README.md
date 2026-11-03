@@ -1,8 +1,6 @@
 # 🏕 Mundo Vivo
 
-Uma vila em pixel art que **cresce sozinha**: cada **seguidor vira um morador**, e os moradores decidem sozinhos o que fazer (cortar madeira, plantar, minerar, forjar, construir, vigiar, explorar, conversar, brigar…). Você é o **deus**: decreta, sussurra, vota, manda, abençoa, castiga e derruba meteoros. O jogo narra a própria história em **legendas de vídeo vertical (9:16)** e **grava clipes** prontos para postar.
-
-> Interpretação própria do formato "mundo de IA com seguidores como moradores". Não é cópia de nenhum perfil.
+Um jogo para você assistir e interferir: uma vila em pixel art que **cresce sozinha**. Dois moradores acendem uma fogueira numa clareira e, se houver comida e lugar para dormir, **viajantes chegam por conta própria**. Eles têm ficha de D&D, decidem o que fazer (cortar madeira, plantar, minerar, forjar, construir, vigiar, explorar, conversar, brigar…) e você é o **deus**: decreta, sussurra, manda, abençoa, castiga e derruba meteoros. O jogo narra a própria história em legendas de vídeo vertical (9:16) e grava clipes.
 
 ## Rodar
 
@@ -22,13 +20,13 @@ Não abra o `index.html` direto (`file://`): módulos ES precisam de um servidor
 - Dia/noite, estações (o inverno é duro: estoque no outono), chuva, seca. Fome, cansaço, solidão; há mortes.
 - **Ofícios**: lenhador, fazendeiro, mineiro, mestre de obras, ferreiro, guarda, explorador, rei.
 
-## Seguidores = moradores
+## Crescimento
 
-Painel **Seguidores**: cole os @ reais de quem te segue (um por linha) e eles chegam em **caravana**, em fila pela trilha da montanha. Com 2 seguidores é um acampamento; com 40, um reino.
+Viajantes chegam sozinhos em fila pela trilha da montanha, quando há comida no armazém e camas livres (e a vila constrói mais cabanas quando as camas acabam). Em ~60 dias de jogo (cerca de 24 min em 1×) costuma passar de 30 moradores. Você também pode chamar gente na hora, com ou sem nome, no painel **Chamar moradores**.
 
-## Votação ("stories")
+## Votação
 
-**Eleger rei**, **próxima obra**, **expedição**. Você abre a votação, soma os votos que vieram dos stories (+1/+5) e encerra; o resultado vira história e muda o mundo. A votação também aparece no vídeo.
+**Eleger rei**, **próxima obra**, **expedição**. Você abre a votação e escolhe o vencedor (ou soma votos e encerra); o resultado vira história e muda o mundo. Também aparece no vídeo.
 
 ## Moradores estilo D&D
 
