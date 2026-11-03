@@ -99,17 +99,28 @@ export class Sprites {
 
   // Personagem 10x16 (2 frames de caminhada). Em cache por aparência.
   person(a, frame, flags = 0) {
-    const key = `p${a.skin}${a.hair}${a.hue}${frame}${flags}`;
+    const key = `p${a.skin}${a.hair}${a.hue}${frame}${flags}${a.cls}`;
     let c = this.cache.get(key);
     if (c) return c;
     const [cc, x] = cv(10, 16); c = cc;
     const skin = ['#f1c9a0', '#e0a878', '#b9805a', '#8a5a3c'][a.skin], hair = ['#3a2414', '#c8a14a', '#8a3a1e', '#1c1c20', '#d8d8d8'][a.hair];
-    const shirt = `hsl(${a.hue} 55% 48%)`, shirt2 = `hsl(${a.hue} 55% 36%)`;
-    R(x, 'rgba(0,0,0,.0)', 0, 0, 1, 1);
+    const OUT = { guerreiro: '#8d909a', barbaro: '#8a5a30', paladino: '#d0b04a', patrulheiro: '#3f7a3a', ladino: '#34343f', bardo: '#c9433a', clerigo: '#e6e6e6', mago: '#6b4aa8' };
+    const base = OUT[a.cls] || `hsl(${a.hue} 55% 48%)`;
+    const shirt = base, shirt2 = base.startsWith('#') ? 'rgba(0,0,0,.28)' : `hsl(${a.hue} 55% 36%)`;
     R(x, hair, 2, 1, 6, 3); R(x, skin, 3, 3, 4, 4); R(x, hair, 2, 3, 1, 2); R(x, hair, 7, 3, 1, 2); R(x, '#1c1c22', 3, 5, 1, 1); R(x, '#1c1c22', 6, 5, 1, 1);
     R(x, shirt, 2, 8, 6, 5); R(x, shirt2, 2, 12, 6, 1); R(x, skin, 1, 9, 1, 3); R(x, skin, 8, 9, 1, 3);
     R(x, '#3a3040', frame ? 2 : 3, 13, 2, 3); R(x, '#3a3040', frame ? 6 : 5, 13, 2, 3);
-    if (flags & 1) { R(x, '#e8c030', 2, 0, 6, 2); R(x, '#e8c030', 2, -1 + 0, 1, 1); R(x, '#e8c030', 5, 0, 1, 1); R(x, '#e8c030', 7, 0, 1, 1); }
+    switch (a.cls) {
+      case 'guerreiro': R(x, '#9a9ca4', 2, 1, 6, 3); R(x, '#6c6f78', 4, 2, 2, 1); R(x, '#b8bac2', 2, 9, 6, 1); break;
+      case 'barbaro': R(x, '#e8e0c8', 2, 0, 1, 2); R(x, '#e8e0c8', 7, 0, 1, 2); R(x, '#5c3a1c', 2, 8, 6, 1); R(x, skin, 1, 8, 1, 4); break;
+      case 'paladino': R(x, '#d0b04a', 2, 1, 6, 3); R(x, '#fff3b0', 4, 1, 2, 1); R(x, '#3f6fa8', 1, 9, 1, 6); R(x, '#3f6fa8', 8, 9, 1, 6); break;
+      case 'patrulheiro': R(x, '#2f5f2c', 2, 1, 6, 2); R(x, '#2f5f2c', 1, 3, 1, 3); R(x, '#6b4326', 8, 8, 1, 6); break;
+      case 'ladino': R(x, '#23232c', 2, 1, 6, 4); R(x, skin, 3, 4, 4, 3); R(x, '#1c1c22', 3, 5, 1, 1); R(x, '#1c1c22', 6, 5, 1, 1); break;
+      case 'bardo': R(x, '#c9433a', 2, 1, 6, 2); R(x, '#f2d466', 7, 0, 1, 2); R(x, '#f2d466', 3, 10, 4, 1); break;
+      case 'clerigo': R(x, '#d8a33a', 4, 9, 2, 3); R(x, '#d8a33a', 3, 10, 4, 1); R(x, '#f4f4f4', 2, 1, 6, 1); break;
+      case 'mago': R(x, '#6b4aa8', 4, 0, 2, 1); R(x, '#6b4aa8', 3, 1, 4, 1); R(x, '#6b4aa8', 2, 2, 6, 2); R(x, '#f2d466', 4, 2, 1, 1); R(x, '#4a3180', 2, 13, 6, 3); break;
+    }
+    if (flags & 1) { R(x, '#e8c030', 2, 0, 6, 2); R(x, '#e8c030', 2, -1, 1, 1); R(x, '#e8c030', 5, 0, 1, 1); R(x, '#e8c030', 7, 0, 1, 1); }
     this.cache.set(key, c);
     return c;
   }

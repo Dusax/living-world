@@ -30,14 +30,24 @@ Painel **Seguidores**: cole os @ reais de quem te segue (um por linha) e eles ch
 
 **Eleger rei**, **próxima obra**, **expedição**. Você abre a votação, soma os votos que vieram dos stories (+1/+5) e encerra; o resultado vira história e muda o mundo. A votação também aparece no vídeo.
 
-## Quem decide pelos moradores
+## Moradores estilo D&D
+
+Cada seguidor chega com uma **ficha**: raça (humano, elfo, anão, halfling, meio-orc), **classe** (guerreiro, bárbaro, paladino, patrulheiro, ladino, bardo, clérigo, mago), atributos FOR/DES/CON/INT/SAB/CAR (4d6 descartando o menor), PV, alinhamento (derivado da personalidade), **nível 1–10** e XP (coletar, colher, construir, explorar, conversar, ajudar, sobreviver).
+
+A classe muda o jeito de viver: bárbaro corta mais madeira, patrulheiro acha mais comida e anda rápido nas expedições, ladino descobre o mapa, bardo faz amizades mais rápido, clérigo cura quem está por perto, mago constrói mais depressa e forja ferramentas em dobro, paladino é candidato natural a rei. Cada classe tem roupa própria no mapa.
+
+**Rei por clamor popular:** numa cidade grande, depois de alguns dias, o povo pede um rei. Abre-se uma votação (candidatos por carisma, nível e laços). Se você não decidir em 2 dias, o povo vota sozinho.
+
+## Quem decide pelos moradores (mentes)
 
 | Cérebro | Como funciona | Custo |
 |---|---|---|
-| **Instinto** (padrão) | Utilidade ponderada: necessidades × personalidade × ofício × estado do povoado × sua influência | Grátis, offline |
-| **Claude** | Cada decisão é um prompt (estado, lembranças, relações, "voz do céu"); devolve JSON `{thought, action, target, say}` | Sua chave |
+| **Instinto** (padrão) | Utilidade ponderada: necessidades × personalidade × classe × ofício × estado do povoado × sua influência | Grátis, offline |
+| **Mentes (IA)** | Um **pool** de provedores: Gemini (AI Studio), Groq, OpenRouter, Ollama local, qualquer URL compatível com OpenAI, ou Claude. Cada um tem limite por minuto e por dia (editável) | Pode ser 100% grátis |
 
-Se o Claude erra, demora (15 s) ou pede algo impossível, o morador cai no instinto. Fome extrema vira reflexo nos dois. Ligue em **IA (Claude) e jogo**: a chave fica só no `localStorage` e vai direto para `api.anthropic.com`; há limite de chamadas e contador de tokens.
+O jogo **reveza** entre as mentes com folga, coloca em espera a que devolver 429, desliga a que recusar a chave e, se nenhuma puder responder, usa o instinto. Modo **híbrido**: decisões importantes (decreto, sussurro, recém-chegado, solidão, rei) sempre consultam a IA; as comuns, só a fração que você definir (padrão 25%). Isso mantém o consumo dentro de planos grátis.
+
+Configure em **Mentes (IA) e jogo**: escolha o provedor, cole a chave, ajuste modelo e limites. Chaves ficam só no `localStorage` do navegador. Os limites e nomes de modelo iniciais são conservadores e **podem estar desatualizados**: confira a página do provedor. Para a IA funcionar, abra o jogo localmente (`npm start`) ou numa hospedagem sua; o link publicado como artefato do Claude bloqueia conexões externas.
 
 ## Vídeo e narração
 
@@ -58,9 +68,9 @@ Controles: arrastar = câmera · roda/pinça = zoom · botão direito = mandar o
 src/world.js     terreno, trilhas, marcos, recursos, estruturas
 src/sim.js       motor: tempo, estações, planejador de obras, ofícios, ações, votação, poderes, save/load
 src/brain.js     instinto (utilidade), prompt do LLM, parser
-src/agent.js     personalidade e estado
+src/agent.js     fichas D&D (classes, raças, atributos, nível), personalidade
 src/path.js      busca de caminho (BFS)
-src/llm.js       cliente da API da Anthropic (navegador)
+src/llm.js       pool de mentes: provedores, limites, rodízio, modo híbrido
 src/sprites.js   sprites em pixel art gerados por código
 src/render.js    renderização, luz, clima, HUD, legendas
 src/narrator.js  fila de falas e legendas

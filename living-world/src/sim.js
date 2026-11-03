@@ -4,7 +4,7 @@ import {
   T, K, KIND_NAME, DEFS, TPD, SEASONS, SEASON_DAYS, W, H,
 } from './world.js';
 import { bfs, cheb } from './path.js';
-import { makeAgent, randomName, ROLE_LABEL } from './agent.js';
+import { makeAgent, randomName, ROLE_LABEL, CLASSES, RACES, mod, XP_TABLE, MAX_LEVEL, maxHpFor, rollSheet } from './agent.js';
 import { utilityDecide, keywordBias, templateLine, templateReply } from './brain.js';
 
 export const INV_CAP = 8;
@@ -79,6 +79,18 @@ export class Sim {
   foodAvailable(a) { return a.inv.food > 0 || this.stock.food > 0; }
   pooled(res) { return this.stock[res] + this.living().reduce((s, a) => s + a.inv[res], 0); }
 
+  // ---------- D&D: experiência e nível ----------
+  gainXp(a, n) {
+    if (!a.alive || a.lvl >= MAX_LEVEL) return;
+    a.xp += n;
+    while (a.lvl < MAX_LEVEL && a.xp >= XP_TABLE[a.lvl + 1]) {
+      a.lvl++;
+      const before = a.maxHp; a.maxHp = maxHpFor(a); a.hp = Math.min(a.maxHp, a.hp + (a.maxHp - before) + 10);
+      this.remember(a, `Subi para o nível ${a.lvl} (${CLASSES[a.cls].label}).`);
+      this.log('level', `⭐ ${a.name} (${CLASSES[a.cls].label}) subiu para o nível ${a.lvl}.`, a.id);
+      if (a.lvl >= 4 && a.lvl % 2 === 0) this.beat(`${a.name}, ${CLASSES[a.cls].label.toLowerCase()}, chegou ao nível ${a.lvl}.`, { prio: 1, agent: a.id });
+    }
+  }
   // ---------- população ----------
   spawnAgent(name, near = false, at = null) {
     const c = this.center;
@@ -111,8 +123,9 @@ export class Sim {
     });
     const n = out.length;
     this.log('event', n === 1 ? `🚶 ${out[0].name} chegou a ${this.name}.` : `🚶 Uma caravana de ${n} seguidores chegou a ${this.name}.`);
-    if (n === 1) this.beat(`Chegou ${out[0].name}. Mais um morador em ${this.name}.`, { prio: 2, agent: out[0].id });
-    else this.beat(n > 5 ? `Chegaram ${n} novos seguidores. E com eles, muitos outros moradores.` : `Chegaram ${n} novos seguidores. Como ${out[0].name} e ${out[1].name}.`, { prio: 2, at: [this.center.x, this.center.y] });
+    const cl = (a) => `${CLASSES[a.cls].label.toLowerCase()} ${RACES[a.race].label.toLowerCase()}`;
+    if (n === 1) this.beat(`Chegou ${out[0].name}, ${cl(out[0])}. Mais um morador em ${this.name}.`, { prio: 2, agent: out[0].id });
+    else this.beat(n > 5 ? `Chegaram ${n} novos seguidores. E com eles, muitos outros moradores.` : `Chegaram ${n} novos seguidores. Como ${out[0].name}, ${CLASSES[out[0].cls].label.toLowerCase()}, e ${out[1].name}, ${CLASSES[out[1].cls].label.toLowerCase()}.`, { prio: 2, at: [this.center.x, this.center.y] });
     return out;
   }
 
@@ -147,7 +160,8 @@ export class Sim {
       const t = a.traits;
       const aff = { ferreiro: t.diligence, explorador: t.curiosity + t.bravery * 0.3, fazendeiro: t.sociability * 0.3 + t.kindness * 0.4, lenhador: t.diligence * 0.4 + t.bravery * 0.2, mineiro: t.diligence * 0.5 + t.bravery * 0.3, construtor: t.diligence * 0.3 + t.sociability * 0.3, guarda: t.bravery };
       let best = null, bs = -1e9;
-      for (const r of roles) { const s = (target(r) - count(r)) * 2 + (aff[r] || 0) + this.rng() * 0.3; if (s > bs) { bs = s; best = r; } }
+      const cr = CLASSES[a.cls]?.roles || [];
+      for (const r of roles) { const s = (target(r) - count(r)) * 2 + (aff[r] || 0) + (cr[0] === r ? 1.2 : cr[1] === r ? 0.6 : 0) + this.rng() * 0.3; if (s > bs) { bs = s; best = r; } }
       a.role = best;
       if (best) this.remember(a, `Agora sou ${ROLE_LABEL[best]} em ${this.name}.`);
     }
@@ -350,6 +364,12 @@ export class Sim {
     if (this.tick % 4 === 0) this.regrow();
     this.growFields();
     if (this.tick % 3 === 0) this.moveAnimals();
+    if (this.tick % 3 === 0) {
+      for (const c of this.agents) {
+        if (!c.alive || c.cls !== 'clerigo') continue;
+        for (const o of this.agents) if (o.alive && o.hp < o.maxHp && cheb(o.x, o.y, c.x, c.y) <= 3) o.hp = Math.min(o.maxHp, o.hp + 1.5 + mod(c.stats.wis) * 0.5);
+      }
+    }
     for (const a of this.agents) if (a.alive) this.stepAgent(a);
   }
 
@@ -360,6 +380,8 @@ export class Sim {
       else if (r < 0.2) this.setWeather('seca', TPD * 2);
     }
     if (this.day() % SEASON_DAYS === 1 && this.day() > 1) { this.log('event', `Chegou ${this.seasonName()}.`); this.beat(`Chegou ${this.seasonName().toLowerCase()} em ${this.name}.`, { prio: 0 }); }
+    for (const a of this.living()) this.gainXp(a, 1);
+    this.kingClamor();
     this.rebalanceRoles();
     this.spreadForest();
     const pop = this.living().length;
@@ -378,6 +400,27 @@ export class Sim {
         if (tier === 3 && !this.king) this.log('event', '👑 O reino precisa de um rei. Abra uma votação!');
       }
       this.lastTier = tier;
+    }
+  }
+  // O povo de uma cidade grande, depois de alguns dias, pede um rei. Sem resposta sua, o próprio povo vota.
+  kingClamor() {
+    const pop = this.living().length;
+    if (this.king || pop < 16) return;
+    if (!this.clamorDay) { this.clamorDay = this.day(); return; }
+    if (!this.poll && this.day() - this.clamorDay >= 4) {
+      if (this.createPoll('king')) {
+        this.poll.opened = this.day(); this.poll.auto = true;
+        this.log('event', '👑 O povo clama por um rei.');
+        this.beat(`O povo de ${this.name} quer um rei.`, { prio: 3 });
+      }
+    } else if (this.poll && this.poll.kind === 'king' && this.poll.auto && this.day() - this.poll.opened >= 2) {
+      const live = this.living();
+      for (const v of live) {   // cada morador vota em quem mais admira (laços + carisma)
+        let best = 0, bs = -1e9;
+        this.poll.options.forEach((o, i) => { const c = this.byId(o.payload.agent); if (!c || c === v) return; const sc = (v.rel[c.id] || 0) + mod(c.stats.cha) * 6 + this.rng() * 25; if (sc > bs) { bs = sc; best = i; } });
+        this.vote(best, 1);
+      }
+      this.resolvePoll();
     }
   }
   setWeather(type, dur) {
@@ -448,7 +491,7 @@ export class Sim {
     a.fatigue = a.sleeping ? Math.max(0, a.fatigue - 1.6) : Math.min(100, a.fatigue + 0.3);
     a.loneliness = Math.min(100, a.loneliness + 0.2 * (0.5 + a.traits.sociability));
     if (a.hunger >= 100) a.hp -= 2; else if (a.fatigue >= 100) a.hp -= 0.5;
-    else if (a.hunger < 60 && a.fatigue < 70) a.hp = Math.min(100, a.hp + 0.3);
+    else if (a.hunger < 60 && a.fatigue < 70) a.hp = Math.min(a.maxHp, a.hp + 0.3);
     if (a.hp <= 0) this.kill(a, a.hunger >= 100 ? 'de fome' : a.fatigue >= 100 ? 'de exaustão' : 'de ferimentos');
   }
   kill(a, cause) {
@@ -465,7 +508,7 @@ export class Sim {
 
   // ---------- decisão ----------
   decide(a) {
-    if (this.llm && this.llm.ready()) {
+    if (this.llm && this.llm.ready() && (!this.llm.wants || this.llm.wants(this, a))) {
       a.pending = { at: Date.now() };
       this.llm.begin();
       this.llm.decide(this, a).then((d) => {
@@ -627,7 +670,9 @@ export class Sim {
             const i = act.target.y * W + act.target.x;
             const tools = this.stock.tools > 0 ? 1 : 0;
             const base = act.kind === 'wood' ? (a.traits.diligence > 0.6 ? 3 : 2) : (a.traits.diligence > 0.6 ? 2 : 1);
-            const n = Math.min(w.ra[i], base + tools, INV_CAP - a.inv[act.kind]);
+            const perk = (a.cls === 'barbaro' && act.kind === 'wood' ? 1 : 0) + (a.cls === 'patrulheiro' && act.kind === 'food' ? 1 : 0) + (a.stats.str >= 16 && act.kind !== 'food' ? 1 : 0);
+            const n = Math.min(w.ra[i], base + tools + perk, INV_CAP - a.inv[act.kind]);
+            this.gainXp(a, 1);
             w.ra[i] -= n; a.inv[act.kind] += n; act.work = 0;
             if (w.ra[i] <= 0 && act.kind === 'wood') { w.rk[i] = 0; w.rm[i] = 0; if (w.tile[i] === T.FOREST) w.tile[i] = T.GRASS; this.stats.felled++; }
             if (w.ra[i] <= 0 && act.kind === 'stone') { w.rk[i] = 0; w.rm[i] = 0; }
@@ -646,7 +691,7 @@ export class Sim {
         if (++act.work < 3) return;
         if (f.stage === 3) {
           const n = Math.min(INV_CAP - a.inv.food, 8 + (this.stock.tools > 0 ? 1 : 0));
-          a.inv.food += n; f.stage = 0; f.timer = 0;
+          a.inv.food += n; f.stage = 0; f.timer = 0; this.gainXp(a, 2);
           if (!this.firsts.harvest) { this.firsts.harvest = true; this.log('event', '🌾 Primeira colheita.'); this.beat('E pela primeira vez a terra deu comida.', { prio: 2, at: [f.x, f.y], agent: a.id }); }
           this.remember(a, `Colhi ${n} de comida no campo.`);
         } else if (!f.stage) { f.stage = 1; f.timer = 0; this.remember(a, 'Plantei sementes.'); }
@@ -700,7 +745,7 @@ export class Sim {
         if (r === 'moving') return;
         if (++act.work < 6) return;
         if (this.stock.wood < 2 || this.stock.stone < 1) return this.failAct(a, 'falta material');
-        this.stock.wood -= 2; this.stock.stone -= 1; this.stock.tools++;
+        this.stock.wood -= 2; this.stock.stone -= 1; this.stock.tools += a.cls === 'mago' ? 2 : 1; this.gainXp(a, 2);
         this.remember(a, 'Forjei uma ferramenta.');
         return this.doneAct(a);
       }
@@ -708,10 +753,11 @@ export class Sim {
       case 'expedition': {
         const lm = w.landmarks.find((l) => l.id === act.lm);
         if (!lm || lm.found) return this.doneAct(a);
-        const r = this.moveTo(a, act, (x, y) => cheb(x, y, lm.x, lm.y) <= 1);
+        let r = this.moveTo(a, act, (x, y) => cheb(x, y, lm.x, lm.y) <= 1);
+        if (r === 'moving' && (a.cls === 'ladino' || a.cls === 'patrulheiro')) r = this.moveTo(a, act, (x, y) => cheb(x, y, lm.x, lm.y) <= 1); // passo extra
         if (r === 'fail') return this.failAct(a, 'perdi a trilha');
         if (r === 'moving') return;
-        lm.found = true;
+        lm.found = true; this.gainXp(a, 25);
         const night = this.hour() >= 20 || this.hour() < 5;
         const texts = {
           lagoa: 'Atrás das árvores, uma lagoa de água limpa.', acude: 'Um açude escondido. Água para os animais.',
@@ -754,7 +800,7 @@ export class Sim {
     const r = this.moveTo(a, act, (x, y) => rectDist(x, y, rect) <= 1 && !inRect(x, y, rect));
     if (r === 'fail') return this.failAct(a, 'não alcancei o terreno');
     if (r === 'moving') return;
-    if (++act.work < d.work * 2) return;
+    if (++act.work < Math.max(6, Math.round(d.work * 2 * (1 - 0.05 * mod(a.stats.int))))) return;
     if (!this.affordable(p.type)) return this.failAct(a, 'faltou material');
     if (p.type === 'castle') {
       for (const [fx, fy] of footprint({ x: p.site.x, y: p.site.y, w: d.w, h: d.h })) {
@@ -775,6 +821,7 @@ export class Sim {
     else addStructure(w, p.type, p.site.x, p.site.y, p.type === 'field' ? { stage: 0, timer: 0 } : {});
     if (this.forced === p.type) this.forced = null;
     this.evict();
+    this.gainXp(a, p.type === 'castle' ? 40 : 6);
     this.afterBuild(a, p.type, p.site);
     this.doneAct(a);
   }
@@ -816,7 +863,9 @@ export class Sim {
     act.work++;
     if (act.work < 3) return;
     const ka = a.traits.kindness, kt = t.traits.kindness;
-    let delta = 4 + (ka + kt) * 4;
+    let delta = 4 + (ka + kt) * 4 + Math.max(0, mod(a.stats.cha)) * 0.8;
+    if (a.cls === 'bardo' || t.cls === 'bardo') delta *= 1.6;
+    this.gainXp(a, 1);
     if (this.rng() < 0.15 && (a.traits.bravery + t.traits.bravery) / 2 > 0.55 && (ka + kt) / 2 < 0.5) { delta = -12; this.log('conflict', `${a.name} e ${t.name} discutiram.`, a.id); }
     this.bond(a, t, delta); this.bond(t, a, delta);
     a.loneliness = Math.max(0, a.loneliness - 40); t.loneliness = Math.max(0, t.loneliness - 30);
@@ -835,6 +884,7 @@ export class Sim {
     a.inv.food -= n; t.inv.food += n;
     if (act.say) this.say(a, act.say);
     this.bond(t, a, 12); this.bond(a, t, 5);
+    this.gainXp(a, 3);
     this.log('give', `${a.name} deu ${n} comida a ${t.name}.`, a.id);
     this.remember(a, `Dei ${n} comida a ${t.name}.`); this.remember(t, `${a.name} me deu ${n} comida. Não esquecerei.`);
     this.doneAct(a);
@@ -846,7 +896,7 @@ export class Sim {
     const live = this.living();
     let q, options;
     if (kind === 'king') {
-      const score = (a) => Object.values(a.rel).reduce((s, v) => s + v, 0) + a.traits.sociability * 30 + a.traits.bravery * 20;
+      const score = (a) => Object.values(a.rel).reduce((s, v) => s + v, 0) + a.traits.sociability * 30 + a.traits.bravery * 20 + mod(a.stats.cha) * 8 + a.lvl * 6 + (a.cls === 'paladino' ? 15 : 0);
       options = live.slice().sort((x, y) => score(y) - score(x)).slice(0, 4).map((a) => ({ label: a.name, payload: { agent: a.id } }));
       q = `Quem será o rei de ${this.name}?`;
     } else if (kind === 'build') {
@@ -914,7 +964,7 @@ export class Sim {
     return ok;
   }
   smite(a) { a.hp -= 50; this.log('god', `⚡ ${a.name} foi atingido por um raio!`, a.id); this.remember(a, 'Um raio caiu do céu sobre mim!'); if (a.hp <= 0) this.kill(a, 'por um raio'); }
-  bless(a) { a.hp = 100; a.hunger = Math.min(a.hunger, 20); a.fatigue = Math.min(a.fatigue, 20); this.log('god', `✨ ${a.name} foi abençoado.`, a.id); this.remember(a, 'Uma luz quente me envolveu. Estou renovado.'); }
+  bless(a) { a.hp = a.maxHp; a.hunger = Math.min(a.hunger, 20); a.fatigue = Math.min(a.fatigue, 20); this.log('god', `✨ ${a.name} foi abençoado.`, a.id); this.remember(a, 'Uma luz quente me envolveu. Estou renovado.'); }
 
   trigger(name, x, y) {
     const w = this.world;
@@ -970,7 +1020,7 @@ export class Sim {
     return {
       v: 2, seed: this.seed, name: this.name, tick: this.tick, rng: this.rng.getState(), nextAgentId: this.nextAgentId,
       stock: this.stock, weather: this.weather, decreeText: this.decreeText, decreeUntil: this.decreeUntil, stats: this.stats, graves: this.graves,
-      logs: this.logs.slice(-200), king: this.king, forced: this.forced, firsts: this.firsts, lastTier: this.lastTier, animals: this.animals, plot: this.plot,
+      logs: this.logs.slice(-200), king: this.king, forced: this.forced, firsts: this.firsts, clamorDay: this.clamorDay, needSpace: this.needSpace, cache: { proj: this._cache.proj || null, res: this._cache.res || null }, lastTier: this.lastTier, animals: this.animals, plot: this.plot,
       agents: this.agents.map((a) => ({ ...a, pending: null })),
       world: {
         tile: Array.from(w.tile), rk: Array.from(w.rk), ra: Array.from(w.ra), rm: Array.from(w.rm), occ: Array.from(w.occ), trail: Array.from(w.trail),
@@ -985,10 +1035,13 @@ export class Sim {
     s.decreeText = j.decreeText; s.decreeUntil = j.decreeUntil; s.stats = j.stats; s.graves = j.graves; s.logs = j.logs;
     s.king = j.king; s.forced = j.forced; s.firsts = j.firsts; s.lastTier = j.lastTier; s.animals = j.animals; s.plot = j.plot || null;
     s.agents = j.agents.map((a) => ({ ...a, pending: null }));
+    for (const a of s.agents) if (!a.cls) { rollSheet(s, a); a.hp = Math.min(a.hp, a.maxHp); }
+    s.clamorDay = j.clamorDay || 0;
     const w = s.world, jw = j.world;
     w.tile.set(jw.tile); w.rk.set(jw.rk); w.ra.set(jw.ra); w.rm.set(jw.rm); w.occ.set(jw.occ); w.trail.set(jw.trail);
     w.structures = jw.structures; w.decor = jw.decor; w.landmarks = jw.landmarks; w.nextStructId = jw.nextStructId; w.start = jw.start;
-    s._cache = {};
+    s._cache = { proj: j.cache?.proj || null, res: j.cache?.res || null };
+    s.needSpace = !!j.needSpace;
     return s;
   }
 }

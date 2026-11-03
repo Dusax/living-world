@@ -48,3 +48,13 @@ input[type=checkbox] { width: auto; }
 }
 
 textarea { width: 100%; font: inherit; color: var(--fg); background: #1d2840; border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; resize: vertical; }
+
+.mind { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin: 6px 0; background: #121a2b; }
+.mind .row { margin: 4px 0; }
+.mind input[type=text], .mind input[type=password], .mind input:not([type]), .mind input[type=number] { flex: 1; min-width: 0; }
+.mind input[type=number] { width: 70px; flex: none; }
+.mind .st { font-size: 11px; color: var(--mut); }
+.sheet { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin: 6px 0; }
+.sheet div { background: #121a2b; border: 1px solid var(--line); border-radius: 6px; text-align: center; padding: 3px 0; font-size: 11px; color: var(--mut); }
+.sheet b { display: block; font-size: 14px; color: var(--fg); }
+#log .level { color: #f7e19c; } #log .conflict { color: #ff9f6b; }

@@ -1,6 +1,6 @@
 // Cérebro por instinto: utilidade ponderada por necessidades, personalidade, ofício e "voz do céu".
 import { pick } from './rng.js';
-import { describeTraits, ROLE_LABEL } from './agent.js';
+import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITY_LABEL, ABILITIES, mod, alignment } from './agent.js';
 
 const KEYWORDS = [
   [/com(er|ida)|fome|fruta|colh|plant|aliment|campo/i, { gather_food: 40, farm: 45, eat: 10 }],
@@ -38,6 +38,10 @@ const THOUGHTS = {
   expedition: ['Quero saber o que existe além da clareira.', 'Vou explorar. Alguém precisa.'],
 };
 
+const CLASS_BIAS = {
+  guerreiro: { patrol: 12 }, barbaro: { gather_wood: 14 }, paladino: { patrol: 8, build: 6, give: 10 }, patrulheiro: { gather_food: 10, expedition: 14 },
+  ladino: { expedition: 16 }, bardo: { talk: 22 }, clerigo: { give: 14, farm: 6 }, mago: { smith: 16, build: 8 },
+};
 // Ofício -> bônus por ação
 const ROLE_BIAS = {
   lenhador: { gather_wood: 24 }, fazendeiro: { farm: 32, gather_food: 6 }, mineiro: { gather_stone: 32 },
@@ -47,7 +51,7 @@ const ROLE_BIAS = {
 export function utilityDecide(sim, a) {
   const t = a.traits, r = sim.rng;
   const living = sim.living(), pop = living.length, st = sim.stock;
-  const bias = sim.biasFor(a), roleB = ROLE_BIAS[a.role] || {};
+  const bias = sim.biasFor(a), roleB = ROLE_BIAS[a.role] || {}, classB = CLASS_BIAS[a.cls] || {};
   const hour = sim.hour(), night = hour >= 21 || hour < 5;
   const needs = sim.projectNeeds();
   const famine = st.food < pop * 1.2 && pop >= 4;   // modo fome: todo mundo vira comida
@@ -56,7 +60,7 @@ export function utilityDecide(sim, a) {
     const fk = d.type + (d.kind || '');
     const recentFail = a.fails[fk] && sim.tick - a.fails[fk] < 40 ? 50 : 0;
     const fam = famine ? (key === 'gather_food' ? 35 : key === 'farm' ? 30 : ['build', 'patrol', 'smith', 'expedition', 'talk', 'wander', 'gather_stone'].includes(key) ? -35 : 0) : 0;
-    opts.push({ score: score + r() * 8 + (bias[key] || 0) + (roleB[key] || 0) + fam - recentFail, d: { ...d, thought: pick(r, THOUGHTS[key]) } });
+    opts.push({ score: score + r() * 8 + (bias[key] || 0) + (roleB[key] || 0) + (classB[key] || 0) + fam - recentFail, d: { ...d, thought: pick(r, THOUGHTS[key]) } });
   };
 
   if (a.hunger > 40 && sim.foodAvailable(a)) add('eat', a.hunger * 1.5, { type: 'eat' });
@@ -159,7 +163,8 @@ export function buildPrompt(sim, a) {
   const rel = (o) => { const v = a.rel[o.id] || 0; return v > 60 ? 'amigo' : v > 20 ? 'simpático' : v < -40 ? 'rival' : v < -15 ? 'antipático' : 'neutro'; };
   const p = sim.nextProject();
   const L = [];
-  L.push(`Você é ${a.name}, ${ROLE_LABEL[a.role] || 'morador'} de ${sim.name} (${describeTraits(a)}).`);
+  L.push(`Você é ${a.name}, ${RACES[a.race].label} ${CLASSES[a.cls].label} nível ${a.lvl}, ${ROLE_LABEL[a.role] || 'morador'} de ${sim.name} (${describeTraits(a)}), alinhamento ${alignment(a)}.`);
+  L.push(`Atributos: ${ABILITIES.map((k) => `${ABILITY_LABEL[k]} ${a.stats[k]} (${mod(a.stats[k]) >= 0 ? '+' : ''}${mod(a.stats[k])})`).join(', ')}. Aja como essa classe agiria: ${CLASSES[a.cls].desc}`);
   L.push(`Agora: dia ${sim.day()}, ${String(Math.floor(sim.hour())).padStart(2, '0')}h, ${sim.seasonName()}, clima: ${sim.weather.type}. ${sim.name} é ${sim.tierName().toLowerCase()} com ${sim.living().length} moradores${sim.king ? ` e rei ${sim.byId(sim.king)?.name}` : ''}.`);
   L.push(`Seu estado: fome ${Math.round(a.hunger)}/100 (100 = morrendo), cansaço ${Math.round(a.fatigue)}/100, solidão ${Math.round(a.loneliness)}/100, vida ${Math.round(a.hp)}/100.`);
   L.push(`Você carrega: ${a.inv.food} comida, ${a.inv.wood} madeira, ${a.inv.stone} pedra. ${a.home ? 'Você tem casa.' : 'Você NÃO tem casa.'}`);

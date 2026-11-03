@@ -1,9 +1,9 @@
 import { Sim, describeAct, buildingName, TIERS } from './sim.js';
-import { LLM, MODELS } from './llm.js';
+import { LLM, PRESETS, newProvider } from './llm.js';
 import { draw, screenToTile, TS } from './render.js';
 import { Sprites } from './sprites.js';
 import { Narrator } from './narrator.js';
-import { describeTraits, ROLE_LABEL } from './agent.js';
+import { describeTraits, ROLE_LABEL, CLASSES, RACES, ABILITIES, ABILITY_LABEL, XP_TABLE, MAX_LEVEL, mod, alignment } from './agent.js';
 import { TPD, W, H, DEFS } from './world.js';
 
 const $ = (s) => document.querySelector(s);
@@ -96,10 +96,16 @@ function renderCard(force) {
   const act = a.alive ? (a.pending ? 'pensando…' : a.sleeping ? 'dormindo' : a.act ? describeAct(sim, a.act) : 'decidindo…') : 'morto';
   const src = a.act?.source ? ` <span class="muted small">(${esc(a.act.source)})</span>` : '';
   const home = sim.world.structures.find((s) => s.id === a.home);
+  const cls = CLASSES[a.cls], nextXp = a.lvl >= MAX_LEVEL ? XP_TABLE[MAX_LEVEL] : XP_TABLE[a.lvl + 1], prevXp = XP_TABLE[a.lvl];
+  const xpPct = a.lvl >= MAX_LEVEL ? 100 : Math.round(((a.xp - prevXp) / Math.max(1, nextXp - prevXp)) * 100);
   const html = `
-    <h3 style="margin:2px 0">${esc(a.name)} ${a.alive ? '' : '† '}<span class="muted small">${esc(ROLE_LABEL[a.role] || 'morador')} · ${esc(describeTraits(a))}</span></h3>
-    ${bar('Vida', a.hp, false)}${bar('Fome', a.hunger)}${bar('Cansaço', a.fatigue)}${bar('Solidão', a.loneliness)}
-    <div class="small">🍖 ${a.inv.food} · 🪵 ${a.inv.wood} · 🪨 ${a.inv.stone} · ${home ? '🏠 tem casa' : '⛺ sem casa'}</div>
+    <h3 style="margin:2px 0">${esc(a.name)} ${a.alive ? '' : '† '}${a.role === 'rei' ? '👑 ' : ''}<span class="muted small">${esc(RACES[a.race].label)} ${esc(cls.label)} · nível ${a.lvl}</span></h3>
+    <div class="small muted">${esc(ROLE_LABEL[a.role] || 'morador')} · ${esc(alignment(a))} · ${esc(describeTraits(a))}</div>
+    <div class="small muted" style="margin:2px 0">${esc(cls.desc)}</div>
+    ${bar('XP', xpPct, false)}
+    <div class="sheet">${ABILITIES.map((k) => `<div>${ABILITY_LABEL[k]}<b>${a.stats[k]}</b>${mod(a.stats[k]) >= 0 ? '+' : ''}${mod(a.stats[k])}</div>`).join('')}</div>
+    ${bar('Vida', (a.hp / a.maxHp) * 100, false)}${bar('Fome', a.hunger)}${bar('Cansaço', a.fatigue)}${bar('Solidão', a.loneliness)}
+    <div class="small">PV ${Math.round(a.hp)}/${a.maxHp} · 🍖 ${a.inv.food} · 🪵 ${a.inv.wood} · 🪨 ${a.inv.stone} · ${home ? '🏠 tem casa' : '⛺ sem casa'}</div>
     <div class="small" style="margin-top:4px"><b>Agora:</b> ${esc(act)}${src}</div>
     <div class="thought">${a.thought ? '“' + esc(a.thought) + '”' : ''}</div>
     <div class="tags">${relHtml || '<span class="muted">sem laços ainda</span>'}</div>
@@ -110,7 +116,7 @@ function renderCard(force) {
 function renderPeople() {
   $('#people').innerHTML = sim.living().map((a) => {
     const act = a.pending ? 'pensando…' : a.sleeping ? 'dormindo' : a.act ? describeAct(sim, a.act) : '—';
-    return `<button class="person${a.id === selected ? ' sel' : ''}" data-id="${a.id}"><span class="dot" style="background:hsl(${a.hue} 55% 48%)"></span>${esc(a.name)}${a.role === 'rei' ? ' 👑' : ''}<small>${esc(ROLE_LABEL[a.role] || '')} · ${esc(act)}</small></button>`;
+    return `<button class="person${a.id === selected ? ' sel' : ''}" data-id="${a.id}"><span class="dot" style="background:hsl(${a.hue} 55% 48%)"></span>${esc(a.name)}${a.role === 'rei' ? ' 👑' : ''}<small>${esc(CLASSES[a.cls].label)} ${a.lvl} · ${esc(ROLE_LABEL[a.role] || '')} · ${esc(act)}</small></button>`;
   }).join('') || '<div class="muted">Ninguém restou.</div>';
 }
 $('#people').addEventListener('click', (e) => { const b = e.target.closest('[data-id]'); if (b) { select(+b.dataset.id); follow = true; } });
@@ -185,7 +191,7 @@ $('#scriptBtn').onclick = async () => {
   const box = $('#narr'); box.hidden = false;
   if (!evs.length) { box.textContent = 'Nada digno de nota nos últimos dias.'; return; }
   let lines;
-  if (llm.enabled && llm.key) {
+  if (llm.enabled && llm.pick()) {
     box.textContent = 'O cronista afia a pena…';
     try { const txt = await llm.narrate(sim, evs); box.textContent = txt; lines = txt.split(/(?<=[.!?])\s+/).filter(Boolean); } catch (e) { llm.fail(e); box.textContent = 'O cronista falhou: ' + e.message; return; }
   } else { lines = evs.slice(-8).map((x) => x.replace(/^\[[^\]]+\]\s*/, '')); box.textContent = lines.join('\n'); }
@@ -203,16 +209,37 @@ $('#recBtn').onclick = () => {
   recorder.start(); $('#recBtn').textContent = '⏹ Parar e baixar'; $('#recBtn').classList.add('danger');
 };
 
-// IA
-$('#llmModel').innerHTML = MODELS.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
-try { const cfg = JSON.parse(store.get(LLM_KEY) || '{}'); llm.key = cfg.key || ''; llm.model = cfg.model || llm.model; llm.enabled = !!cfg.enabled && !!llm.key; } catch { /* ignore */ }
-$('#llmKey').value = llm.key; $('#llmModel').value = llm.model;
-const saveLLM = () => store.set(LLM_KEY, JSON.stringify({ key: llm.key, model: llm.model, enabled: llm.enabled }));
-$('#llmKey').onchange = (e) => { llm.key = e.target.value.trim(); saveLLM(); };
-$('#llmModel').onchange = (e) => { llm.model = e.target.value; saveLLM(); };
-$('#llmOn').onchange = (e) => { llm.key = $('#llmKey').value.trim(); llm.enabled = e.target.checked && !!llm.key; if (e.target.checked && !llm.key) llm.lastError = 'Cole sua chave da Anthropic primeiro.'; saveLLM(); renderLLM(); };
-function renderLLM() { const s = llm.stats; $('#llmStats').textContent = `Chamadas: ${s.calls}/${llm.maxCalls} · erros: ${s.errors} · tokens: ${s.inTok} in / ${s.outTok} out${llm.lastError ? ' · ' + llm.lastError.slice(0, 140) : ''}`; $('#llmOn').checked = llm.enabled; }
+// Mentes (IA): vários provedores, cada um com limites próprios
+const MINDS_KEY = 'living-world-minds';
+try { llm.load(JSON.parse(store.get(MINDS_KEY) || 'null')); } catch { /* ignore */ }
+const saveMinds = () => store.set(MINDS_KEY, JSON.stringify(llm.toJSON()));
+$('#mindPreset').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('');
+function renderMinds() {
+  $('#minds').innerHTML = llm.providers.map((p, i) => `<div class="mind" data-i="${i}">
+    <div class="row"><label class="small"><input type="checkbox" data-f="enabled" ${p.enabled ? 'checked' : ''}> <b>${esc(p.label)}</b></label><span style="flex:1"></span><button data-del="${i}" title="Remover">✕</button></div>
+    <div class="row"><input data-f="baseUrl" value="${esc(p.baseUrl)}" placeholder="URL da mente"></div>
+    <div class="row"><input data-f="key" type="password" value="${esc(p.key)}" placeholder="${p.keyOptional ? 'chave (opcional)' : 'chave de API'}" autocomplete="off"></div>
+    <div class="row"><input data-f="model" value="${esc(p.model)}" placeholder="modelo"></div>
+    <div class="row small"><span>por minuto</span><input data-f="rpm" type="number" min="1" value="${p.rpm}"><span>por dia</span><input data-f="rpd" type="number" min="1" value="${p.rpd}"></div>
+    <div class="st" id="mst${i}"></div></div>`).join('') || '<div class="muted small">Nenhuma mente adicionada. Escolha uma abaixo (ex.: Gemini ou Groq, ambos com plano grátis).</div>';
+}
+$('#minds').addEventListener('change', (e) => {
+  const box = e.target.closest('[data-i]'), f = e.target.dataset.f; if (!box || !f) return;
+  const p = llm.providers[+box.dataset.i]; p[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Math.max(1, +e.target.value || 1) : e.target.value.trim(); saveMinds();
+});
+$('#minds').addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { llm.providers.splice(+b.dataset.del, 1); saveMinds(); renderMinds(); } });
+$('#mindAdd').onclick = () => { llm.providers.push(newProvider($('#mindPreset').value)); saveMinds(); renderMinds(); };
+$('#llmOn').onchange = (e) => { llm.enabled = e.target.checked; saveMinds(); renderLLM(); };
+$('#llmShare').oninput = (e) => { llm.share = +e.target.value; $('#llmShareV').textContent = llm.share + '%'; saveMinds(); };
+$('#llmOn').checked = llm.enabled; $('#llmShare').value = llm.share; $('#llmShareV').textContent = llm.share + '%';
+function renderLLM() {
+  const s = llm.stats, now = Date.now();
+  llm.providers.forEach((p, i) => { const el = $('#mst' + i); if (!el) return; const r = llm.state(p); const wait = Math.ceil((r.cool - now) / 1000); el.textContent = `${r.stats.calls} chamadas · ${r.dayCount}/${p.rpd} hoje · ${r.stamps.filter((t) => now - t < 60000).length}/${p.rpm} no minuto · ${r.stats.errors} erros${wait > 0 ? ` · em espera ${wait}s` : ''}${r.lastError ? ' · ' + r.lastError : ''}`; });
+  $('#llmStats').textContent = `Total: ${s.calls} chamadas · ${s.inTok} tokens de entrada / ${s.outTok} de saída${llm.enabled && !llm.providers.some((p) => llm.usable(p)) ? ' · nenhuma mente disponível agora (usando instinto)' : ''}`;
+  $('#llmOn').checked = llm.enabled;
+}
 llm.onChange = renderLLM;
+renderMinds();
 
 $('#saveBtn').onclick = () => { $('#saveBtn').textContent = save() ? '✅ Salvo' : '❌ Falhou'; setTimeout(() => ($('#saveBtn').textContent = '💾 Salvar'), 1500); };
 $('#loadBtn').onclick = () => { if (!load()) sim.log('info', 'Nenhum jogo salvo ainda.'); };

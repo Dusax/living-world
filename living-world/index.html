@@ -94,11 +94,12 @@
     </details>
 
     <details>
-      <summary>IA (Claude) e jogo</summary>
-      <p class="small muted">Sem chave, os habitantes decidem por <b>instinto</b> (regras + personalidade). Com chave, cada decisão vira uma chamada ao Claude, que interpreta a pessoa. A chave fica só neste navegador e vai direto para a Anthropic.</p>
-      <label class="row"><input type="checkbox" id="llmOn"> Usar Claude como mente</label>
-      <div class="row"><input id="llmKey" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
-      <div class="row"><select id="llmModel"></select></div>
+      <summary>Mentes (IA) e jogo</summary>
+      <p class="small muted">Sem nenhuma mente, os moradores decidem por <b>instinto</b>. Com mentes, as decisões importantes e uma fração das comuns vão para a IA. Você pode ligar <b>várias gratuitas</b>: o jogo reveza e respeita o limite de cada uma. As chaves ficam só neste navegador.</p>
+      <label class="row"><input type="checkbox" id="llmOn"> Usar IA como mente</label>
+      <div class="row small"><span>Decisões comuns pela IA:</span><input type="range" id="llmShare" min="0" max="100" step="5" value="25" style="flex:1"><b id="llmShareV">25%</b></div>
+      <div id="minds"></div>
+      <div class="row"><select id="mindPreset"></select><button id="mindAdd">➕ Adicionar</button></div>
       <div id="llmStats" class="small muted"></div>
       <div class="btns"><button id="saveBtn">💾 Salvar</button><button id="loadBtn">📂 Carregar</button><button id="exportBtn">⬇ Exportar crônica</button><button id="newBtn" class="danger">🌍 Novo mundo</button></div>
     </details>

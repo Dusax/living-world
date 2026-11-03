@@ -69,3 +69,23 @@ test('mente LLM (mock) decide e falha cai para o instinto', async () => {
   const sources = new Set(s.agents.flatMap((a) => a.mem.map((m) => (/^\[([^\]]+)\]/.exec(m.text) || [])[1]).filter(Boolean)));
   assert.ok(sources.has('mente')); assert.ok([...sources].some((x) => x.startsWith('instinto')));
 });
+
+test('D&D: fichas, classes variadas, XP e nível', () => {
+  const s = new Sim(6);
+  s.addFollowers(Array.from({ length: 14 }, (_, i) => 'M' + i));
+  const classes = new Set(s.living().map((a) => a.cls));
+  assert.ok(classes.size >= 5, `pouca variedade: ${[...classes]}`);
+  for (const a of s.living()) { assert.ok(a.stats.str >= 3 && a.stats.cha <= 20 && a.maxHp > 40 && a.race); }
+  run(s, 8);
+  assert.ok(s.living().some((a) => a.lvl >= 2), 'ninguém subiu de nível');
+  assert.ok(s.logs.some((l) => l.kind === 'level'));
+});
+
+test('o povo clama por um rei e escolhe sozinho se você não votar', () => {
+  const s = new Sim(2);
+  s.addFollowers(Array.from({ length: 18 }, (_, i) => 'R' + i));
+  run(s, 14);
+  assert.ok(s.king, 'ninguém virou rei');
+  assert.equal(s.byId(s.king).role, 'rei');
+  assert.ok(s.logs.some((l) => /clama por um rei/.test(l.text)));
+});
